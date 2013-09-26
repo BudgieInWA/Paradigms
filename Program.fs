@@ -117,11 +117,29 @@ let rec expSize = function A|B -> 1
                          | Mix (x, y) -> 1+expSize x + expSize y
                          | Var _ -> raise (Exception "expSize for a Var")       // This shouldn't happen
 
-
+type variableMapping = Map<string, exp>
 
 /////////////////////////////////////////////////                        
 /////  Put your code for the first part here                         
 /////////////////////////////////////////////////
+
+/// Unify two experements if possible, using a partial variable mapping.
+/// new variables may be mapped, but existing mappings wont be touched.
+/// exp2 cannot have variables.
+let rec unify (mapping:variableMapping option) exp1 exp2 : variableMapping option =
+    match mapping with
+    | None -> None
+    | Some m -> 
+        match exp1, exp2 with
+        | A, A -> mapping
+        | B, B -> mapping
+        | Mix(x, y), Mix(xx, yy) -> unify (unify mapping x xx) y yy
+        | Var x, e ->
+            match m.TryFind x with
+            | Some existingMapping -> unify mapping e existingMapping // Only works when exp2 has no vars
+            | None -> Some (m.Add(x, e))
+        | _ -> None
+
 
 // Suffices checks whether exp1 suffices instead of exp2 according to rules.
 let suffices rules (exp1, exp2) = false  // You'll need to implement this properly!
