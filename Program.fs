@@ -123,27 +123,42 @@ type variableMapping = Map<string, exp>
 /////  Put your code for the first part here                         
 /////////////////////////////////////////////////
 
-/// Unify two experements if possible, using a partial variable mapping.
+/// Determine the variable mapping that unifies two experements, using a partial variable mapping as a starting point.
 /// new variables may be mapped, but existing mappings wont be touched.
 /// exp2 cannot have variables.
-let rec unify (mapping:variableMapping option) exp1 exp2 : variableMapping option =
+let rec unify (mapping:variableMapping option) (exp1, exp2) : variableMapping option =
     match mapping with
     | None -> None
     | Some m -> 
         match exp1, exp2 with
         | A, A -> mapping
         | B, B -> mapping
-        | Mix(x, y), Mix(xx, yy) -> unify (unify mapping x xx) y yy
+        | Mix(x, y), Mix(xx, yy) -> unify (unify mapping (x, xx)) (y, yy)
         | Var x, e ->
             match m.TryFind x with
-            | Some existingMapping -> unify mapping e existingMapping // Only works when exp2 has no vars
+            | Some existingMapping -> unify mapping (e, existingMapping) // Only works when exp2 has no vars
             | None -> Some (m.Add(x, e))
         | _ -> None
 
+/// Does the mapping let us satisfy all of the rules (last arg)
+let rec suffAnd rules mapping = function
+    | [] -> true
+    | _ -> false
 
-// Suffices checks whether exp1 suffices instead of exp2 according to rules.
-let suffices rules (exp1, exp2) = false  // You'll need to implement this properly!
+/// Does the set of rules rs let us say that exp1 suffices for exp2.
+let rec suffOr (rules: rule list) (exp1, exp2) mapping rs =
+    match rs with
+    | [] -> false
+    | Rule ((e1, e2), conditions)::tail ->
+        match unify (unify (Some mapping) (e1, exp1)) (e2, exp2) with
+        | None -> false
+        | Some m -> suffAnd rules mapping conditions || suffOr rules (exp1, exp2) mapping tail
 
+/// Does exp1 suffice for exp2 using the rulelist
+let suffices (rules: rule list) (exp1, exp2) =
+    suffOr rules (exp1, exp2) Map.empty rules
+
+//let a = suffices [Rule((Mix(Var "x", A), Mix(Var "x", B)), [])] (Mix(A, A), Mix(B, B))
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Hints:  First, see the hints on the project handout. Then the following are hints to help get you started. 
