@@ -35,17 +35,17 @@ type variableMapping = Map<string, exp>
 /// Determine the variable mapping that unifies two experements, using a partial variable mapping as a starting point.
 /// new variables may be mapped, but existing mappings wont be touched.
 /// exp2 cannot have variables.
-let rec unify (mapping:variableMapping option) (exp1, exp2) : variableMapping option =
+let rec unify (exp1, exp2) (mapping:variableMapping option) =
     match mapping with
     | None -> None
     | Some m -> 
         match exp1, exp2 with
         | A, A -> mapping
         | B, B -> mapping
-        | Mix(x, y), Mix(xx, yy) -> unify (unify mapping (x, xx)) (y, yy)
+        | Mix(x, y), Mix(xx, yy) -> mapping |> unify (x, xx) |> unify (y, yy)
         | Var x, e ->
             match m.TryFind x with
-            | Some existingMapping -> unify mapping (e, existingMapping) // Only works when exp2 has no vars
+            | Some existingMapping -> unify (e, existingMapping) mapping // Only works when exp2 has no vars
             | None -> Some (m.Add(x, e))
         | _ -> None
 
@@ -60,7 +60,7 @@ let rec suffOr (rules: ruleGen list) (exp1, exp2) mapping rs =
     | [] -> false
     | rg::tail ->
         match rg() with Rule ((e1, e2), conditions) ->
-            match unify (unify (Some mapping) (e1, exp1)) (e2, exp2) with
+            match Some mapping |> unify (e1, exp1) |> unify (e2, exp2) with
             | None -> false
             | Some m -> suffAnd rules mapping conditions || suffOr rules (exp1, exp2) mapping tail
 
