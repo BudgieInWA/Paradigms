@@ -16,21 +16,14 @@ type ruleGen = unit -> rule      // A rule generator creates new variables for a
                                  // with variable names in other rules, or when the rule is used multiple times.
 type labRules = ruleGen list     // Each lab has a list of rules, represented as generators.
 
-
-// Types for identifying labs and clients
-type labID = int
-type clientID = int
+type private variableMapping = Map<string, exp>
 
 /// The number of Bases and Mixes in an experiment
 let rec expSize = function A|B -> 1
                          | Mix (x, y) -> 1+expSize x + expSize y
                          | Var _ -> raise (System.Exception "expSize for a Var")       // This shouldn't happen
 
-type variableMapping = Map<string, exp>
 
-/////////////////////////////////////////////////                        
-/////  Put your code for the first part here                         
-/////////////////////////////////////////////////
 
 /// Determine the variable mapping that unifies two experements, using a partial variable mapping as a starting point.
 /// new variables may be mapped, but existing mappings wont be touched.

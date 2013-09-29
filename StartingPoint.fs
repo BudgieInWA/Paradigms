@@ -93,6 +93,10 @@ let dbg clientID pre res = res // pr clientID pre res
 let dbgIndent clientID pre res = res // prIdent clientID pre res 
 
 
+// Types for identifying labs and clients
+type labID = int
+type clientID = int
+
 
 //////////  Project part 2 follows
 
