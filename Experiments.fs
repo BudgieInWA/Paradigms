@@ -23,13 +23,22 @@ let rec expSize = function A|B -> 1
                          | Mix (x, y) -> 1+expSize x + expSize y
                          | Var _ -> raise (System.Exception "expSize for a Var")       // This shouldn't happen
 
+/// Resolve a variable to it's eventual final expression through the mapping.
+let rec resolveMapping (mapping:variableMapping) x =
+    match mapping.TryFind x with
+    | None -> None
+    | Some (Var xx) ->
+        match resolveMapping mapping xx with
+        | None -> Some (Var xx) // The var maps to another var
+        | e -> e
+    | Some e -> Some e
 
 
 /// Determine the variable mapping that unifies two experements, using a partial variable mapping as a starting point.
 /// new variables may be mapped, but existing mappings wont be touched.
 /// exp2 cannot have variables.
 let rec unify (exp1, exp2) (mapping:variableMapping option) =
-    match mapping with
+    match mapping with // unwrap mapping
     | None -> None
     | Some m -> 
         match exp1, exp2 with
@@ -37,9 +46,10 @@ let rec unify (exp1, exp2) (mapping:variableMapping option) =
         | B, B -> mapping
         | Mix(x, y), Mix(xx, yy) -> mapping |> unify (x, xx) |> unify (y, yy)
         | Var x, e ->
-            match m.TryFind x with
-            | Some existingMapping -> unify (e, existingMapping) mapping // Only works when exp2 has no vars
+            match resolveMapping m x with
+            | Some existingExp -> unify (existingExp, e) mapping
             | None -> Some (m.Add(x, e))
+        | e, Var x -> unify (Var x, e) mapping
         | _ -> None
 
 /// Does the mapping let us satisfy all of the expressions
