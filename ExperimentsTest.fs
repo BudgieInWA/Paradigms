@@ -14,7 +14,7 @@ let newVar4 (v1,v2,v3,v4) = newVar v1, newVar v2, newVar v3, newVar v4
 let correctStr = function false -> "FAIL :( "
                         | true ->  "success "
 let prTest test expected res = printf "%s %s returned %b\n" (correctStr (res=expected)) test res
-let prNl = printf "\n"
+let prNl() = printf "\n"
 
 
 // A set of rules for testing
@@ -57,7 +57,7 @@ let runTests () =
  
     suffices [rule1] (A, A) |> prTest "suffices [rule1] (A, A)" true
     suffices [rule1] (A, B) |> prTest "suffices [rule1] (A, B)" false
-    
+    prNl()
 
     suffices rulesA (A, B) |> prTest "suffices rulesA (A, B)" false
     suffices rulesA (Mix (A, B), A) |> prTest "suffices rulesA (Mix (A, B),A)" true
@@ -65,8 +65,7 @@ let runTests () =
     suffices rulesA (Mix (Mix (B, B), B),A) |> prTest "suffices rulesA (Mix (Mix (B, B), B),A)" false
     suffices rulesA (Mix (Mix (B, B), B), Mix (B, B)) |> prTest "suffices rulesA (Mix (Mix (B, B), B), Mix (B, B))" true
     suffices rulesA (Mix (Mix (A, B), B), Mix (B, A)) |> prTest "suffices rulesA (Mix (Mix (A, B), B), Mix (B, A))" false
-    prNl
-
+    prNl()
 
     suffices rulesB (A, B) |> prTest "suffices rulesB (A, B)" false
     suffices rulesB (Mix (A, B), A) |> prTest "suffices rulesB (Mix (A, B),A)" true
@@ -74,8 +73,7 @@ let runTests () =
     suffices rulesB (Mix (Mix (B, B), B),A) |> prTest "suffices rulesB (Mix (Mix (B, B), B),A)" false
     suffices rulesB (Mix (Mix (B, B), B), Mix (B, B)) |> prTest "suffices rulesB (Mix (Mix (B, B), B), Mix (B, B))" true
     suffices rulesB (Mix (Mix (A, B), B), Mix (B, A)) |> prTest "suffices rulesB (Mix (Mix (A, B), B), Mix (B, A))" true
-    prNl
-
+    prNl()
 
     suffices rulesC (A, B) |> prTest "suffices rulesC (A, B)" true
     suffices rulesC (Mix (A, B), A) |> prTest "suffices rulesC (Mix (A, B),A)" true
