@@ -24,6 +24,15 @@ let rec expSize = function A|B -> 1
                          | Var _ -> raise (System.Exception "expSize for a Var")       // This shouldn't happen
 
 
+/// Find the experiment that you get when replaceing all vars with their mappings
+let rec substitute (mapping:variableMapping) = function
+    | Var x ->
+        match mapping.TryFind x with
+        | None -> Var x
+        | Some e -> substitute mapping e
+    | Mix(e, ee) -> Mix(substitute mapping e, substitute mapping ee)
+    | e -> e
+
 
 /// Determine the variable mapping that unifies two experements, using a partial variable mapping as a starting point.
 /// new variables may be mapped, but existing mappings wont be touched.
@@ -43,19 +52,20 @@ let rec unify (exp1, exp2) (mapping:variableMapping option) =
         | _ -> None
 
 /// Does the mapping let us satisfy all of the expressions
-let rec suffAnd rules mapping = function
+let rec suffSubgoals rules mapping = function
     | [] -> true
-    | _ -> false
+    | (e, ee) :: tail -> suffOr rules (substitute mapping e, substitute mapping ee) mapping rules 
+                      && suffSubgoals rules mapping tail
 
 /// Does the set of rules rs let us say that exp1 suffices for exp2.
-let rec suffOr (rules: ruleGen list) (exp1, exp2) mapping rs =
+and suffOr (rules: ruleGen list) (exp1, exp2) mapping rs =
     match rs with
     | [] -> false
     | rg::tail ->
         match rg() with Rule ((e1, e2), conditions) ->
             match Some mapping |> unify (e1, exp1) |> unify (e2, exp2) with
-            | None -> false
-            | Some m -> suffAnd rules mapping conditions || suffOr rules (exp1, exp2) mapping tail
+            | None -> suffOr rules (exp1, exp2) mapping tail
+            | Some m -> suffSubgoals rules mapping conditions || suffOr rules (exp1, exp2) mapping tail
 
 /// Does exp1 suffice for exp2 using the rulelist
 let suffices (rules: ruleGen list) (exp1, exp2) =
