@@ -17,15 +17,20 @@ type ruleGen = unit -> rule      // A rule generator creates new variables for a
 type labRules = ruleGen list     // Each lab has a list of rules, represented as generators.
 
 type private variableMapping = Map<string, exp>
+//type private substitution = variableMapping * set-of-sets
 
 /// The number of Bases and Mixes in an experiment
 let rec expSize = function A|B -> 1
                          | Mix (x, y) -> 1+expSize x + expSize y
                          | Var _ -> raise (System.Exception "expSize for a Var")       // This shouldn't happen
 
+let rec containsVar x = function
+    | Var y when x = y -> true
+    | Mix (e, ee) -> containsVar x e || containsVar x ee
+    | _ -> false
 
 /// Find the experiment that you get when replaceing all vars with their mappings
-let rec substitute (mapping:variableMapping) = function
+let rec substitute (mapping:variableMapping) : (exp -> exp) = function
     | Var x ->
         match mapping.TryFind x with
         | None -> Var x
@@ -33,22 +38,56 @@ let rec substitute (mapping:variableMapping) = function
     | Mix(e, ee) -> Mix(substitute mapping e, substitute mapping ee)
     | e -> e
 
+/// Add x->exp to the mapping, checking for consistency 
+let rec actuallyAddMapping x exp : (variableMapping option -> variableMapping option) = function
+    | None -> None
+    | Some mapping ->
+        match exp with
+        | Var y when y = x -> Some mapping // Mapping var x to var x, don't actually add it
+        | e when containsVar x e -> None   // Mapping var x to something bigger to x that contains x (inconsistent)
+        | e -> mapping.Add(x, e) |> Some |> replaceFromRHS x // after replacing x from RHS, invariant is maintained
+
+/// Replace all occurences of Var x in RHS with whatever x maps to
+and replaceFromRHS x : (variableMapping option -> variableMapping option) = function
+    | None -> None
+    | Some mapping ->
+        match Map.tryFindKey (fun k v -> containsVar x v) mapping with
+        | None -> Some mapping
+        | Some k -> Some mapping |> actuallyAddMapping k (substitute mapping (Map.find k mapping)) |> replaceFromRHS x
+    
+/// Invariant: Any variable on the RHS of a mapping does not appear on the LHS
+let rec addMapping (x:string) exp : (variableMapping option -> variableMapping option) = function
+    | None -> None
+    | Some mapping ->
+        let e = substitute mapping exp // e does not contain any var that in on the LHS
+        match mapping.TryFind x with
+        | None -> Some mapping |> actuallyAddMapping x e
+        | Some ee -> Some mapping |> addEquivalence e ee
+         
+/// Returns a mapping in which e is equivalent to ee (which may be none, and may have new mappings)
+and addEquivalence e ee : (variableMapping option -> variableMapping option) = function
+    | None -> None
+    | Some mapping ->
+        match e, ee with
+        | A,A | B,B -> Some mapping // Equivalent as is.
+        | Mix(a, b), Mix(c, d) -> Some mapping |> addEquivalence a c |> addEquivalence b d
+        | Var y, _ -> Some mapping |> addMapping y ee // y needs to map to ee to make them equiv
+        | _, Var z -> Some mapping |> addMapping z e  // z needs to map to e  to make them equiv
+        | _ -> None
 
 /// Determine the variable mapping that unifies two experements, using a partial variable mapping as a starting point.
 /// new variables may be mapped, but existing mappings wont be touched.
 /// exp2 cannot have variables.
-let rec unify (exp1, exp2) (mapping:variableMapping option) =
-    match mapping with
+let rec unify (exp1, exp2) : (variableMapping option -> variableMapping option) = function
     | None -> None
-    | Some m -> 
+    | Some mapping -> 
         match exp1, exp2 with
-        | A, A -> mapping
-        | B, B -> mapping
-        | Mix(x, y), Mix(xx, yy) -> mapping |> unify (x, xx) |> unify (y, yy)
+        | A,A | B,B -> Some mapping
+        | Mix(x, y), Mix(xx, yy) -> Some mapping |> unify (x, xx) |> unify (y, yy)
         | Var x, e ->
-            match m.TryFind x with
-            | Some existingMapping -> unify (e, existingMapping) mapping // Only works when exp2 has no vars
-            | None -> Some (m.Add(x, e))
+            match mapping.TryFind x with
+            | Some existingMapping -> Some mapping |> unify (e, existingMapping) // Only works when exp2 has no vars
+            | None -> Some mapping |> addMapping x e
         | _ -> None
 
 /// Does the mapping let us satisfy all of the expressions
