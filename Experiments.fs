@@ -65,7 +65,7 @@ and suffOr (rules: ruleGen list) (exp1, exp2) mapping rs =
         match rg() with Rule ((e1, e2), conditions) ->
             match Some mapping |> unify (e1, exp1) |> unify (e2, exp2) with
             | None -> suffOr rules (exp1, exp2) mapping tail
-            | Some m -> suffSubgoals rules mapping conditions || suffOr rules (exp1, exp2) mapping tail
+            | Some m -> suffSubgoals rules m conditions || suffOr rules (exp1, exp2) mapping tail
 
 /// Does exp1 suffice for exp2 using the rulelist
 let suffices (rules: ruleGen list) (exp1, exp2) =
