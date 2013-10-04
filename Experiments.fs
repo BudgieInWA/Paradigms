@@ -1,6 +1,6 @@
 module Paradigms.Experiments
 
-//////////////////////////////////////// Types for experiments, rules, etc.
+let maxRuleDepth = 8
 
 type exp = A | B | Mix of exp * exp | Var of string
 
@@ -23,6 +23,8 @@ type private variableMapping = Map<string, exp>
 let rec expSize = function A|B -> 1
                          | Mix (x, y) -> 1+expSize x + expSize y
                          | Var _ -> raise (System.Exception "expSize for a Var")       // This shouldn't happen
+
+let pr d s x = x //printf "%s%s %A\n" (String.replicate d "\t") s x; x
 
 let rec containsVar x = function
     | Var y when x = y -> true
@@ -84,31 +86,30 @@ let rec unify (exp1, exp2) : (variableMapping option -> variableMapping option) 
         match exp1, exp2 with
         | A,A | B,B -> Some mapping
         | Mix(x, y), Mix(xx, yy) -> Some mapping |> unify (x, xx) |> unify (y, yy)
-        | Var x, e ->
+        | Var x, e | e, Var x  ->
             match mapping.TryFind x with
             | Some existingMapping -> Some mapping |> unify (e, existingMapping) // Only works when exp2 has no vars
             | None -> Some mapping |> addMapping x e
         | _ -> None
 
 /// Does the mapping let us satisfy all of the expressions
-let rec suffSubgoals rules mapping = function
-    | [] -> true
-    | (e, ee) :: tail -> suffOr rules (substitute mapping e, substitute mapping ee) mapping rules 
-                      && suffSubgoals rules mapping tail
+let rec suffSubgoals depth rules mapping : ((exp * exp) list -> variableMapping seq) = function
+    | [] -> seq { yield mapping }
+    | (e, ee) :: tail ->
+        seq { for m in suffOr depth rules (substitute mapping e, substitute mapping ee) mapping
+            do yield! suffSubgoals depth rules m tail }
 
-/// Does the set of rules rs let us say that exp1 suffices for exp2.
-and suffOr (rules: ruleGen list) (exp1, exp2) mapping rs =
-    match rs with
-    | [] -> false
-    | rg::tail ->
-        match rg() with Rule ((e1, e2), conditions) ->
-            match Some mapping |> unify (e1, exp1) |> unify (e2, exp2) with
-            | None -> suffOr rules (exp1, exp2) mapping tail
-            | Some m -> suffSubgoals rules m conditions || suffOr rules (exp1, exp2) mapping tail
+/// The sequence of mappings m such that suff(exp1, exp2) under m  
+and suffOr depth (rules: ruleGen list) (exp1, exp2) mapping : variableMapping seq =
+    if depth > maxRuleDepth then printf "WARNING: max depth reached!\n"; Seq.empty
+    else seq { for Rule ((e1, e2), subgoals) in List.map (fun rg -> rg()) rules
+        do yield! match Some mapping |> unify (e1, exp1) |> unify (e2, exp2) with
+                  | None -> Seq.empty
+                  | Some m -> suffSubgoals (depth+1) rules m subgoals }
 
 /// Does exp1 suffice for exp2 using the rulelist
 let suffices (rules: ruleGen list) (exp1, exp2) =
-    suffOr rules (exp1, exp2) Map.empty rules
+    Map.empty |> suffOr 1 rules (exp1, exp2) |> Seq.isEmpty |> not
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Hints:  First, see the hints on the project handout. Then the following are hints to help get you started. 
