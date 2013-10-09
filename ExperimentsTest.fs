@@ -47,11 +47,14 @@ let rule10() = let x, xx, y, z = newVar4 ("0x", "0xx", "0y", "0z")
 let rule11() = Rule ( (A,B),  [] )
 let rule12() = Rule ( (B,A),  [] )
 
+let rule13() = let x, xx, y , z = newVar4 ("13x", "13xx", "13y", "13z") 
+               Rule ((Mix(x,y), Mix(y,xx)), [(x,z); (z,xx)])
+
 let rulesA = [rule1; rule2; rule3; rule6]
 let rulesB = [rule1; rule2; rule3; rule4; rule5; rule6; rule7; rule8]
 let rulesC = [rule4; rule5; rule9; rule10; rule11; rule12]         // Rules 9,10 are slightly tricky. 
                                                                    // Focus on rules like the others first.
-
+let rulesD = [rule13; rule11; rule12]
 
 let runTests () =
 
@@ -81,4 +84,17 @@ let runTests () =
     suffices rulesC (Mix (Mix (B, B), B),A) |> prTest "suffices rulesC (Mix (Mix (B, B), B),A)" true
     suffices rulesC (Mix (Mix (B, B), B), Mix (B, B)) |> prTest "suffices rulesC (Mix (Mix (B, B), B), Mix (B, B))" false
     suffices rulesC (Mix (Mix (A, B), B), Mix (B, A)) |> prTest "suffices rulesC (Mix (Mix (A, B), B), Mix (B, A))" false
+    prNl()
     
+    suffices [rule13] (Mix(A,B), Mix(A,B)) |> prTest "suffices [rule13] (Mix(A,B), Mix(A,B))" false
+    suffices [rule13] (Mix(A,B), Mix(B,B)) |> prTest "suffices [rule13] (Mix(A,B), Mix(B,B))" false
+    suffices [rule13] (Mix(A,A), Mix(B,B)) |> prTest "suffices [rule13] (Mix(A,A), Mix(B,B))" false
+    suffices [rule13] (Mix(A,B), Mix(B,A)) |> prTest "suffices [rule13] (Mix(A,B), Mix(B,A))" false
+    suffices [rule13] (A,A) |> prTest "suffices [rule13] (A,A)" false
+    prNl()
+   
+    suffices rulesD  (Mix(A,B), Mix(A,B)) |> prTest "suffices rulesD (Mix(A,B), Mix(A,B))" false
+    suffices rulesD  (Mix(A,B), Mix(B,B)) |> prTest "suffices rulesD (Mix(A,B), Mix(B,B))" false
+    suffices rulesD  (Mix(A,A), Mix(B,B)) |> prTest "suffices rulesD (Mix(A,A), Mix(B,B))" false
+    suffices rulesD  (Mix(A,B), Mix(B,A)) |> prTest "suffices rulesD (Mix(A,B), Mix(B,A))" true
+    prNl()
