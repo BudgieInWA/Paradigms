@@ -24,14 +24,14 @@ let rec expSize = function A|B -> 1
                          | Mix (x, y) -> 1+expSize x + expSize y
                          | Var _ -> raise (System.Exception "expSize for a Var")       // This shouldn't happen
 
-let pr d s x = x //printf "%s%s %A\n" (String.replicate d "\t") s x; x
+//let pr d s x = x //printf "%s%s %A\n" (String.replicate d "\t") s x; x
 
-let rec containsVar x = function
+let rec containsVar x : (exp -> bool) = function
     | Var y when x = y -> true
     | Mix (e, ee) -> containsVar x e || containsVar x ee
     | _ -> false
 
-/// Find the experiment that you get when replaceing all vars with their mappings
+/// The experiment that you get when you replace all vars with their mappings
 let rec substitute (mapping:variableMapping) : (exp -> exp) = function
     | Var x ->
         match mapping.TryFind x with
@@ -46,18 +46,19 @@ let rec actuallyAddMapping x exp : (variableMapping option -> variableMapping op
     | Some mapping ->
         match exp with
         | Var y when y = x -> Some mapping // Mapping var x to var x, don't actually add it
-        | e when containsVar x e -> None   // Mapping var x to something bigger to x that contains x (inconsistent)
+        | e when containsVar x e -> None   // Mapping var x to something bigger than x that contains x (inconsistent)
         | e -> mapping.Add(x, e) |> Some |> replaceFromRHS x // after replacing x from RHS, invariant is maintained
 
-/// Replace all occurences of Var x in RHS with whatever x maps to
+/// Replace all occurences of Var x in RHS with whatever x maps to, checking for consistency
 and replaceFromRHS x : (variableMapping option -> variableMapping option) = function
     | None -> None
     | Some mapping ->
         match Map.tryFindKey (fun k v -> containsVar x v) mapping with
         | None -> Some mapping
         | Some k -> Some mapping |> actuallyAddMapping k (substitute mapping (Map.find k mapping)) |> replaceFromRHS x
-    
-/// Invariant: Any variable on the RHS of a mapping does not appear on the LHS
+
+/// Add x <=> exp to the mapping if possible maintaining the invariant that:
+/// Any variable on the RHS of a mapping does not appear on the LHS
 let rec addMapping (x:string) exp : (variableMapping option -> variableMapping option) = function
     | None -> None
     | Some mapping ->
@@ -77,9 +78,8 @@ and addEquivalence e ee : (variableMapping option -> variableMapping option) = f
         | _, Var z -> Some mapping |> addMapping z e  // z needs to map to e  to make them equiv
         | _ -> None
 
-/// Determine the variable mapping that unifies two experements, using a partial variable mapping as a starting point.
-/// new variables may be mapped, but existing mappings wont be touched.
-/// exp2 cannot have variables.
+/// Determine the variable mapping that unifies two experements, using a partial variable mapping 
+/// as a starting point. New variables may be mapped, but existing mappings wont be violated.
 let rec unify (exp1, exp2) : (variableMapping option -> variableMapping option) = function
     | None -> None
     | Some mapping -> 
@@ -92,14 +92,14 @@ let rec unify (exp1, exp2) : (variableMapping option -> variableMapping option) 
             | None -> Some mapping |> addMapping x e
         | _ -> None
 
-/// Does the mapping let us satisfy all of the expressions
+/// What mappings let us satisfy all of the subgoals simultaneously
 let rec suffSubgoals depth rules mapping : ((exp * exp) list -> variableMapping seq) = function
     | [] -> seq { yield mapping }
     | (e, ee) :: tail ->
         seq { for m in suffOr depth rules (substitute mapping e, substitute mapping ee) mapping
             do yield! suffSubgoals depth rules m tail }
 
-/// The sequence of mappings m such that suff(exp1, exp2) under m  
+/// The sequence of mappings m such that suff(exp1, exp2) under m
 and suffOr depth (rules: ruleGen list) (exp1, exp2) mapping : variableMapping seq =
     if depth > maxRuleDepth then printf "WARNING: max depth reached!\n"; Seq.empty
     else seq { for Rule ((e1, e2), subgoals) in List.map (fun rg -> rg()) rules
