@@ -165,4 +165,4 @@ let runTests () =
     suffices rulesJ (B, Mix(A,Mix(A,B))) |> prTest "suffices rulesJ (B, Mix(A,Mix(A,B)))" true
     suffices rulesJ (A, Mix(A,A)) |> prTest "suffices rulesJ (A, Mix(A,A))" false
     suffices rulesJ (A, Mix(A,Mix(A,B))) |> prTest "suffices rulesJ (A, Mix(A,Mix(A,B)))" false
-    suffices rulesJ (A, B) |> prTest "suffices rulesJ (A, B)" false
+    suffices rulesJ (A, B) |> prTest "suffices rulesJ (A, B)" true

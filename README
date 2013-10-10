@@ -1,0 +1,12 @@
+Programming Paradigms Project - 2013
+
+The program is split over multiple files. :
+	Experiments.fs - Implementation of experiments and the suffices funtion
+	ExperimentsTest.fs - Code that tests the experiment implementation
+	StartingPoint.fs - Code from the starting point that we haven't found a home
+	                   for yet
+	Program.fs - The program entry point
+
+# Building #
+The .fsproject file contains the correct settings to compile the program. The
+compile order is as listed above.
