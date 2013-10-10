@@ -4,13 +4,27 @@ open Experiments
 
 
 /// Create a new var with a generated, unique name
-let newVar =   let n = ref 0 in   fun v -> n:=!n+1;
-                                           Var (v + string !n)
-let newVar2 v1 v2 = newVar v1, newVar v2
-let newVar3 (v1,v2,v3) = newVar v1, newVar v2, newVar v3
-let newVar4 (v1,v2,v3,v4) = newVar v1, newVar v2, newVar v3, newVar v4
-let newVar5 (v1,v2,v3,v4,v5) = newVar v1, newVar v2, newVar v3, newVar v4, newVar v5
-let newVar6 (v1,v2,v3,v4,v5,v6) = newVar v1, newVar v2, newVar v3, newVar v4, newVar v5, newVar v6
+let nextS =   let n = ref 0 in   fun () -> n:=!n+1;
+                                           string !n
+let newVar x s = Var (x + s)
+let newVar1 x =
+    let s = nextS()
+    newVar x s
+let newVar2 v1 v2 =
+    let s = nextS()
+    newVar v1 s, newVar v2 s
+let newVar3 (v1,v2,v3) =
+    let s = nextS()
+    newVar v1 s, newVar v2 s, newVar v3 s
+let newVar4 (v1,v2,v3,v4) = 
+    let s = nextS()
+    newVar v1 s, newVar v2 s, newVar v3 s,  newVar v4 s
+let newVar5 (v1,v2,v3,v4,v5) =
+    let s = nextS()
+    newVar v1 s, newVar v2 s, newVar v3 s, newVar v4 s, newVar v5 s
+let newVar6 (v1,v2,v3,v4,v5,v6) =
+    let s = nextS()
+    newVar v1 s, newVar v2 s, newVar v3 s, newVar v4 s, newVar v5 s, newVar v6 s
 
 
 let correctStr = function false -> "FAIL    :( "
@@ -20,7 +34,7 @@ let prNl() = printf "\n"
 
 
 // A set of rules for testing
-let rule1 () = let x = newVar "x"
+let rule1 () = let x = newVar1 "x"
                Rule ((x, x), [])
 
 let rule2 () = let x, xx, y = newVar3 ("2x", "2xx", "2y")
@@ -37,7 +51,7 @@ let rule6 () = let x, xx, y, yy = newVar4 ("6x", "6xx", "6y", "6yy")
 let rule7 () = let x, xx, y, yy = newVar4 ("7x", "7xx", "7y", "7yy")
                Rule ((Mix(x,xx), Mix(y,yy)),  [(x,yy); (xx,y)])
 
-let rule8 () = let x = newVar "8x"
+let rule8 () = let x = newVar1 "8x"
                Rule ((x, Mix(x,x)),  [])
 
 let rule9 () = let x, xx, y, z = newVar4 ("9x", "9xx", "9y", "9z")
@@ -69,9 +83,10 @@ let rulesD = [rule13; rule11; rule12]
 let rulesE = [rule1; rule13]
 let rulesF = [rule1; rule14]
 let rulesG = [rule11; rule12; rule14]
-let rulesH = [rule15; rule11; rule12]
-let rulesI = [rule15; rule11]
+let rulesH = [rule11; rule12; rule15]
+let rulesI = [rule11; rule15]
 let rulesJ = [rule11; rule16]
+let rulesK = [rule11; rule12; rule15]
 
 let runTests () =
 
@@ -161,8 +176,25 @@ let runTests () =
     suffices rulesI (Mix(B,B), Mix(A,A)) |> prTest "suffices rulesI (Mix(B,B), Mix(A,A))" false
     prNl()
     
+    suffices rulesK (Mix(A,A), A) |> prTest "suffices rulesK (Mix(A,A), A)" true
+    suffices rulesK (Mix(B,B), B) |> prTest "suffices rulesK (Mix(B,B), B)" true
+    suffices rulesK (Mix(A,A), B) |> prTest "suffices rulesK (Mix(A,A), B)" true
+    suffices rulesK (Mix(B,B), A) |> prTest "suffices rulesK (Mix(B,B), A)" true
+    suffices rulesK (Mix(A,A), Mix(B,B)) |> prTest "suffices rulesK (Mix(A,A), Mix(B,B))" true
+    suffices rulesK (Mix(B,B), Mix(B,B)) |> prTest "suffices rulesK (Mix(B,B), Mix(B,B))" true
+    suffices rulesK (Mix(A,A), Mix(A,A)) |> prTest "suffices rulesK (Mix(A,A), Mix(A,A))" true
+    suffices rulesK (Mix(B,B), Mix(A,A)) |> prTest "suffices rulesK (Mix(B,B), Mix(A,A))" true
+    prNl()
+    
     suffices rulesJ (B, Mix(A,A)) |> prTest "suffices rulesJ (B, Mix(A,A))" true
     suffices rulesJ (B, Mix(A,Mix(A,B))) |> prTest "suffices rulesJ (B, Mix(A,Mix(A,B)))" true
-    suffices rulesJ (A, Mix(A,A)) |> prTest "suffices rulesJ (A, Mix(A,A))" false
-    suffices rulesJ (A, Mix(A,Mix(A,B))) |> prTest "suffices rulesJ (A, Mix(A,Mix(A,B)))" false
     suffices rulesJ (A, B) |> prTest "suffices rulesJ (A, B)" true
+    suffices rulesJ (B, A) |> prTest "suffices rulesJ (B, A)" true
+    suffices rulesJ (A, Mix(A,A)) |> prTest "suffices rulesJ (A, Mix(A,A))" true
+    suffices rulesJ (A, Mix(A,Mix(A,B))) |> prTest "suffices rulesJ (A, Mix(A,Mix(A,B)))" true
+    suffices rulesJ (A, A) |> prTest "suffices rulesJ (A, A)" true
+    suffices rulesJ (Mix(A,A), B) |> prTest "suffices rulesJ (Mix(A,A), B)" true
+
+    prNl()
+    
+    
