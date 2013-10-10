@@ -1,4 +1,7 @@
 Programming Paradigms Project - 2013
+Authors:
+Ben Ritter (20496887)
+Wan Ying Goh (20784663)
 
 The program is split over multiple files. :
 	Experiments.fs - Implementation of experiments and the suffices funtion
