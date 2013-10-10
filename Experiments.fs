@@ -24,8 +24,9 @@ let rec expSize = function A|B -> 1
                          | Mix (x, y) -> 1+expSize x + expSize y
                          | Var _ -> raise (System.Exception "expSize for a Var")       // This shouldn't happen
 
-//let pr d s x = x //printf "%s%s %A\n" (String.replicate d "\t") s x; x
+//let pr d s x = printf "%s%s %A\n" (String.replicate d "\t") s x; x
 
+///Check whether the experiment given contains the variable x.
 let rec containsVar x : (exp -> bool) = function
     | Var y when x = y -> true
     | Mix (e, ee) -> containsVar x e || containsVar x ee
@@ -89,7 +90,7 @@ let rec unify (exp1, exp2) : (variableMapping option -> variableMapping option) 
         | Mix(x, y), Mix(xx, yy) -> Some mapping |> unify (x, xx) |> unify (y, yy)
         | Var x, e | e, Var x  ->
             match mapping.TryFind x with
-            | Some existingMapping -> Some mapping |> unify (e, existingMapping) // Only works when exp2 has no vars
+            | Some existingMapping -> Some mapping |> unify (e, existingMapping)
             | None -> Some mapping |> addMapping x e
         | _ -> None
 
