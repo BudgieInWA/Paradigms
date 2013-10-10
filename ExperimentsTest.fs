@@ -9,10 +9,12 @@ let newVar =   let n = ref 0 in   fun v -> n:=!n+1;
 let newVar2 v1 v2 = newVar v1, newVar v2
 let newVar3 (v1,v2,v3) = newVar v1, newVar v2, newVar v3
 let newVar4 (v1,v2,v3,v4) = newVar v1, newVar v2, newVar v3, newVar v4
+let newVar5 (v1,v2,v3,v4,v5) = newVar v1, newVar v2, newVar v3, newVar v4, newVar v5
+let newVar6 (v1,v2,v3,v4,v5,v6) = newVar v1, newVar v2, newVar v3, newVar v4, newVar v5, newVar v6
 
 
-let correctStr = function false -> "FAIL :( "
-                        | true ->  "success "
+let correctStr = function false -> "FAIL    :( "
+                        | true ->  "Success :) "
 let prTest test expected res = printf "%s %s returned %b\n" (correctStr (res=expected)) test res
 let prNl() = printf "\n"
 
@@ -50,11 +52,17 @@ let rule12() = Rule ( (B,A),  [] )
 let rule13() = let x, xx, y , z = newVar4 ("13x", "13xx", "13y", "13z") 
                Rule ((Mix(x,y), Mix(y,xx)), [(x,z); (z,xx)])
 
+let rule14() = let x, xx, y, yy , z, zz = newVar6 ("14x", "14xx", "14y", "14yy", "14z", "14zz") 
+               Rule ((Mix(x,y), Mix(xx,yy)), [(x,z); (z,y); (xx,zz);(zz,yy); (z,zz)])
+
 let rulesA = [rule1; rule2; rule3; rule6]
 let rulesB = [rule1; rule2; rule3; rule4; rule5; rule6; rule7; rule8]
 let rulesC = [rule4; rule5; rule9; rule10; rule11; rule12]         // Rules 9,10 are slightly tricky. 
                                                                    // Focus on rules like the others first.
 let rulesD = [rule13; rule11; rule12]
+let rulesE = [rule1; rule13]
+let rulesF = [rule1; rule14]
+let rulesG = [rule11; rule12; rule14]
 
 let runTests () =
 
@@ -97,4 +105,29 @@ let runTests () =
     suffices rulesD  (Mix(A,B), Mix(B,B)) |> prTest "suffices rulesD (Mix(A,B), Mix(B,B))" false
     suffices rulesD  (Mix(A,A), Mix(B,B)) |> prTest "suffices rulesD (Mix(A,A), Mix(B,B))" false
     suffices rulesD  (Mix(A,B), Mix(B,A)) |> prTest "suffices rulesD (Mix(A,B), Mix(B,A))" true
+    prNl()
+    
+    suffices rulesE  (Mix(A,B), Mix(A,B)) |> prTest "suffices rulesE (Mix(A,B), Mix(A,B))" true
+    suffices rulesE  (Mix(A,B), Mix(B,B)) |> prTest "suffices rulesE (Mix(A,B), Mix(B,B))" false
+    suffices rulesE  (Mix(A,A), Mix(B,B)) |> prTest "suffices rulesE (Mix(A,A), Mix(B,B))" false
+    suffices rulesE  (Mix(A,B), Mix(B,A)) |> prTest "suffices rulesE (Mix(A,B), Mix(B,A))" true
+    prNl()
+    
+    suffices [rule14] (Mix(A,B), Mix(A,B)) |> prTest "suffices [rule14] (Mix(A,B), Mix(A,B))" false
+    suffices [rule14] (Mix(A,B), Mix(B,B)) |> prTest "suffices [rule14] (Mix(A,B), Mix(B,B))" false
+    suffices [rule14] (Mix(A,A), Mix(B,B)) |> prTest "suffices [rule14] (Mix(A,A), Mix(B,B))" false
+    suffices [rule14] (Mix(A,B), Mix(B,A)) |> prTest "suffices [rule14] (Mix(A,B), Mix(B,A))" false
+    suffices [rule14] (A,A) |> prTest "suffices [rule14] (A,A)" false
+    prNl()
+
+    suffices rulesF  (Mix(A,B), Mix(A,B)) |> prTest "suffices rulesF (Mix(A,B), Mix(A,B))" true
+    suffices rulesF  (Mix(A,B), Mix(B,B)) |> prTest "suffices rulesF (Mix(A,B), Mix(B,B))" false
+    suffices rulesF  (Mix(A,A), Mix(B,B)) |> prTest "suffices rulesF (Mix(A,A), Mix(B,B))" false
+    suffices rulesF  (Mix(A,B), Mix(B,A)) |> prTest "suffices rulesF (Mix(A,B), Mix(B,A))" false
+    prNl()
+        
+    suffices rulesG (Mix(A,A), Mix(B,B)) |> prTest "suffices rulesG (Mix(A,A), Mix(B,B))" true
+    suffices rulesG (Mix(B,B), Mix(B,B)) |> prTest "suffices rulesG (Mix(B,B), Mix(B,B))" false
+    suffices rulesG (Mix(A,A), Mix(A,A)) |> prTest "suffices rulesG (Mix(A,A), Mix(A,A))" false
+    suffices rulesG (Mix(B,B), Mix(A,A)) |> prTest "suffices rulesG (Mix(B,B), Mix(A,A))" true
     prNl()
