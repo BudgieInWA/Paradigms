@@ -47,7 +47,7 @@ let rec actuallyAddMapping x exp : (variableMapping option -> variableMapping op
         match exp with
         | Var y when y = x -> Some mapping // Mapping var x to var x, don't actually add it
         | e when containsVar x e -> None   // Mapping var x to something bigger than x that contains x (inconsistent)
-        | e -> mapping.Add(x, e) |> Some |> replaceFromRHS x // after replacing x from RHS, invariant is maintained
+        | e -> Some(mapping.Add(x, e)) |> replaceFromRHS x // after replacing x from RHS, invariant is maintained
 
 /// Replace all occurences of Var x in RHS with whatever x maps to, checking for consistency
 and replaceFromRHS x : (variableMapping option -> variableMapping option) = function
@@ -55,7 +55,8 @@ and replaceFromRHS x : (variableMapping option -> variableMapping option) = func
     | Some mapping ->
         match Map.tryFindKey (fun k v -> containsVar x v) mapping with
         | None -> Some mapping
-        | Some k -> Some mapping |> actuallyAddMapping k (substitute mapping (Map.find k mapping)) |> replaceFromRHS x
+        | Some k -> Some mapping |> actuallyAddMapping k (substitute mapping (Map.find k mapping))
+                                 |> replaceFromRHS x
 
 /// Add x <=> exp to the mapping if possible maintaining the invariant that:
 /// Any variable on the RHS of a mapping does not appear on the LHS
@@ -99,7 +100,7 @@ let rec suffSubgoals depth rules mapping : ((exp * exp) list -> variableMapping 
         seq { for m in suffOr depth rules (substitute mapping e, substitute mapping ee) mapping
             do yield! suffSubgoals depth rules m tail }
 
-/// The sequence of mappings m such that suff(exp1, exp2) under m
+/// The sequence of mappings m_i such that suff(exp1, exp2) under m_i
 and suffOr depth (rules: ruleGen list) (exp1, exp2) mapping : variableMapping seq =
     if depth > maxRuleDepth then printf "WARNING: max depth reached!\n"; Seq.empty
     else seq { for Rule ((e1, e2), subgoals) in List.map (fun rg -> rg()) rules
