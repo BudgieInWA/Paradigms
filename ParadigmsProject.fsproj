@@ -5,7 +5,7 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{f85e5b53-43bc-4551-9add-dfc2163e183a}</ProjectGuid>
+    <ProjectGuid>{F85E5B53-43BC-4551-9ADD-DFC2163E183A}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <RootNamespace>ParadigmsProject</RootNamespace>
     <AssemblyName>ParadigmsProject</AssemblyName>
@@ -14,10 +14,13 @@
     <Name>ParadigmsProject</Name>
     <BuildOrder>
       <BuildOrder>
+        <String>Concurrency.fs</String>
+        <String>PrintingPrettyStuff.fs</String>
         <String>Experiments.fs</String>
         <String>ExperimentsTest.fs</String>
         <String>StartingPoint.fs</String>
         <String>Program.fs</String>
+        <String>CoordinationTest.fs</String>
       </BuildOrder>
     </BuildOrder>
   </PropertyGroup>
@@ -51,6 +54,9 @@
     <Compile Include="ExperimentsTest.fs" />
     <Compile Include="StartingPoint.fs" />
     <Compile Include="Program.fs" />
+    <Compile Include="CoordinationTest.fs" />
+    <Compile Include="PrintingPrettyStuff.fs" />
+    <Compile Include="Concurrency.fs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\FSharp\1.0\Microsoft.FSharp.Targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
