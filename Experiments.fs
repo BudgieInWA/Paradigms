@@ -1,6 +1,5 @@
 ///Ben Ritter (20496887) & Wan Ying Goh (20784663)
 
-
 module Paradigms.Experiments
 
 let maxRuleDepth = 8
@@ -83,7 +82,7 @@ and addEquivalence e ee : (variableMapping option -> variableMapping option) = f
         | _, Var z -> Some mapping |> addMapping z e  // z needs to map to e  to make them equiv
         | _ -> None
 
-/// Determine the variable mapping that unifies two experements, using a partial variable mapping 
+/// Determine the variable mapping that unifies two experiments, using a partial variable mapping 
 /// as a starting point. New variables may be mapped, but existing mappings wont be violated.
 let rec unify (exp1, exp2) : (variableMapping option -> variableMapping option) = function
     | None -> None
