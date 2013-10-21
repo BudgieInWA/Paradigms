@@ -164,29 +164,71 @@ let hLock obj f = let onUnlock = ref (fun() -> ())
 
 /// A class for clients that coordinate and unify experiments before sending them to labs.  
 /// (You need to finish this class.)
+type queue = (clientID*exp) list
 
-type client (clientID, numLabs) =
+and labMsg = (queue*lab)   
+
+and client (clientID, numLabs) =
     let clients:client[] ref = ref Array.empty
     let labs:lab[] ref = ref Array.empty
     /// The client coordinating each lab, according to the most recent information known by this client.
     let lastKnownCoord = Array.init numLabs (fun labID -> labID)  // Initially client i has lab i, for i=0..numLabs-1
-
     
     // printing functions for this client
     let prStr (pre:string) str = prIndStr clientID (sprintf "Client%d: %s" clientID pre) str 
     let pr (pre:string) res = prStr pre (sprintf "%A" res); res
-
+    let myLab:lab option ref= ref None
+    let q:queue option ref = ref None
+    
     member this.ClientID = clientID  // So other clients can find our ID easily
-    member this.InitClients theClients theLabs =  clients:=theClients; labs:=theLabs
-
-    /// This will be called each time a scientist on this host wants to submit an experiment.
+    member this.InitClients theClients theLabs =  
+        clients:=theClients
+        labs:=theLabs
+        if(Array.length !labs < clientID) then 
+            myLab := Some (!labs).[clientID]
+            q := Some []
+    member this.DoExpFromList theQueue (theLab:lab) delay = 
+        let myExp = theQueue |> List.head |> fst
+        let otherCandidates =
+            [for (c,e) in theQueue do if suffices theLab.Rules (e,myExp) then yield e]
+        let candidates =
+            if List.head otherCandidates = myExp
+                then otherCandidates
+                else myExp::otherCandidates
+        let counts = [
+            for exp in candidates do 
+            yield exp, List.fold (fun x (c,e) -> if suffices theLab.Rules (exp, e) then x+1 else x )
+                                 0 theQueue
+        ]
+        let best = List.fold (fun (e, x) (ee, xx) -> 
+                                 if x > xx then (e,x)
+                                 elif x < xx  then (ee,xx)
+                                 elif expSize e <= expSize ee then (e,x)
+                                 else (ee,xx))
+                             (List.head counts)
+                             (List.tail counts)
+        let result = ref None
+        theLab.DoExp delay (fst best) clientID (fun res -> result:=Some res)
+        while (!result).IsNone do ()  
+        //TODO This is busy waiting, which isn't allowed - you'll need to fix it.
+        //TODO tell ppl their exp result
+        (!result).Value
+        
+        /// This will be called each time a scientist on this host wants to submit an experiment.
     member this.DoExp delay exp =    // You need to write this member.
         //  The following code doesn't coordinate the clients at all.  Replace it with code that does.
-        let result = ref None
-        (!labs).[0].DoExp delay exp clientID (fun res -> result:=Some res)
-        while (!result).IsNone do ()  // This is busy waiting, which isn't allowed - you'll need to fix it.
-        (!result).Value
+        match !myLab with
+            | None -> false //request
+            | Some l -> 
+                let myExpList = [(this.ClientID,exp)]
+                let result = ref None
+                l.DoExp delay exp clientID (fun res -> result:=Some res)
+                while (!result).IsNone do ()  // This is busy waiting, which isn't allowed - you'll need to fix it.
+                (!result).Value
 
+
+        
+      
     // Add any additional members for client here - you will at least need some that can be called from
     // other instances of the client class in order to coordinate requests.
 
