@@ -42,7 +42,7 @@ type lab (labID, rules) =
        startThread ("Lab"+ string labID) <| fun ()->
           if !busy then  let str = sprintf "BANG! lab%d explodes - host%d is already using it" labID (!usingClID).Value
                          prStamp -1 str "" //; failwith str // uncomment this to have the whole program fail.
-          usingClID := Some clID              
+          usingClID := Some clID
           busy:=true
           sleep delay  // Doing experiment (the delay is provided by the client for ease of testing the prototype)
           busy:=false
@@ -138,30 +138,26 @@ and client (id, numLabs) =
     /// the most others, then does it and sends results to people.
     let doExpFromList (theQueue:queue) (theLab:lab) = 
         let _, myExp, myDelay = List.head theQueue // The exp for this client.
-        let otherCandidates =
-            [for c, e, d in theQueue do if suffices theLab.Rules (e,myExp) then yield (e,d)]
-        let candidates =
-            if List.head otherCandidates = (myExp, myDelay) then otherCandidates
-            else (myExp, myDelay) :: otherCandidates
-        let counts = [
-            for (ex, delay) in candidates do
-                let addOneIfSuffices x (c,e,d) = if suffices theLab.Rules (ex, e) then x+1 else x
-                // Count how many experiments this one suffices for.
-                yield (ex, delay, List.fold addOneIfSuffices 0 theQueue) 
-        ]
-        let myMax (e, d, x) (ee, dd, xx) =
-            if x > xx then (e,d,x)
-            elif x < xx  then (ee,dd,xx)
-            elif expSize e <= expSize ee then (e,d,x) //TODO can we make this delay instead?
-            else (ee,dd,xx)
-        let best = List.fold myMax (List.head counts) (List.tail counts)
-        theLab.DoExp (second best) (first best) id (fun res ->
+        let otherCandidates = List.filter (fun (_,e,_) -> suffices theLab.Rules (e, myExp)) theQueue
+        let candidates = if first <| List.head otherCandidates = id then otherCandidates
+                         else List.head theQueue :: otherCandidates
+        let others = List.map (fun (c, ex, delay) ->
+                                   (c, ex, delay, List.filter (fun (_,e,_) -> suffices theLab.Rules (ex, e)) theQueue) )
+                              candidates
+        let betterOf (c, e, d, o) (cc, ee, dd, oo) =
+            if List.length o > List.length oo then (c, e,d,o)
+            elif List.length o < List.length oo  then (cc, ee,dd,oo)
+            elif expSize e <= expSize ee then (c, e,d,o) //TODO can we make this delay instead?
+            else (cc, ee, dd, oo)
+        let bestC, bestE, bestD, bestO = List.fold betterOf (List.head others) (List.tail others)
+        theLab.DoExp bestD bestE id (fun res ->
             reportResult res
-            //TODO:
-            // for client in list of exps that our result suffices for
-            //     them.RTakeResult res
-            )
-        
+            // Give everyone their result.
+            ignore <| List.map (fun (c, _, _) -> (!clients).[c].RTakeResult res theLab.LabID) bestO
+            // Remove done experiments from the queue.
+            let sameClient (c,_,_) (cc,_,_) = c = cc
+            myQueue := Some <| List.filter (fun x -> Option.isNone <| List.tryFind (sameClient x) bestO) theQueue
+        )
     
     /// Passes our lab onto the client at the front of the queue (removing clients that reject the
     /// offer from the queue).
