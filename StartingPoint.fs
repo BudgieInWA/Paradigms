@@ -87,28 +87,23 @@ let hLock obj f = let onUnlock = ref (fun() -> ())
 /// (You need to finish this class.)
 type queue = (clientID*exp) list
 
-and labMsg = (queue*lab)   
+and labMsg = (lab*queue)   
 
 and client (id, numLabs) =
     let clients:client[] ref = ref Array.empty
     let labs:lab[] ref = ref Array.empty
     /// The client coordinating each lab, according to the most recent information known by this client.
     let lastKnownCoord = Array.init numLabs (fun labID -> labID)  // Initially client i has lab i, for i=0..numLabs-1
+    let myLab:lab option ref= ref None
+    let myQueue:queue option ref = ref None
     
     // printing functions for this client
     let prStr (pre:string) str = prIndStr id (sprintf "Client%d: %s" id pre) str 
-    let pr (pre:string) res = prStr pre (sprintf "%A" res); res
-    let myLab:lab option ref= ref None
-    let q:queue option ref = ref None
+    let pr (pre:string) res = prStr pre (sprintf "%A" res);
     
-    member this.ClientID = id  // So other clients can find our ID easily
-    member this.InitClients theClients theLabs =  
-        clients:=theClients
-        labs:=theLabs
-        if(Array.length !labs < id) then 
-            myLab := Some (!labs).[id]
-            q := Some []
-    member this.DoExpFromList (theQueue:queue) (theLab:lab) delay = 
+    /// Chooses an experiment to do from the list that suffices for ours (the first in the list) and
+    /// the most others, then does it and sends results to people.
+    let doExpFromList (theQueue:queue) (theLab:lab) delay = 
         let myExp = theQueue |> List.head |> snd
         let otherCandidates =
             [for (c,e) in theQueue do if suffices theLab.Rules (e,myExp) then yield e]
@@ -134,27 +129,46 @@ and client (id, numLabs) =
         //TODO This is busy waiting, which isn't allowed - you'll need to fix it.
         //TODO tell ppl their exp result
         (!result).Value
+    
+    let passLabOn (c:client) =
+        match !myLab, !myQueue with
+            | Some l, Some q -> c.RPassLab (l, q) 
+            | _ -> raise <| Exception "you've asked me to pass a lab on but I don't have one"
         
-        /// This will be called each time a scientist on this host wants to submit an experiment.
-    member this.DoExp delay exp =    // You need to write this member.
+    member this.ClientID = id  // So other clients can find our ID easily
+    member this.InitClients theClients theLabs =  
+        clients:=theClients
+        labs:=theLabs
+        if(Array.length !labs < id) then 
+            myLab := Some (!labs).[id]
+            myQueue := Some []
+            
+    
+    /// This will be called each time a scientist on this host wants to submit an experiment.
+    member this.DoExp delay exp =
         //  The following code doesn't coordinate the clients at all.  Replace it with code that does.
         match !myLab with
-            | Some l -> this.DoExpFromList [this.ClientID,exp] l delay
-            | None -> false //ask every lab holder that we want a lab
-            //want a 
+            | Some l -> doExpFromList [this.ClientID,exp] l delay
+            | None -> false //TODO ask every lab holder that we be added to their lab's queue
             
     /// Request that we be added to the queue
-    member this.RRequestLab cid exp = false 
+    member this.RRequestLab (other:client) (e:exp) =
+        match !myQueue with
+            | None -> ()
+            | Some q ->
+                myQueue := Some <| q @ [(other.ClientID, e)]
+                if q = [] then passLabOn other
+                ()
         //TODO if i have the lab, add them to my queue (then send it to them if the queue was empty) 
         // else we reply with who we gave it to
 
     /// Pass a lab to this client        
-    member this.RPassLab (msg:labMsg) = false
+    member this.RPassLab (msg:labMsg) = ()
         //TODO If we don't want the lab anymore, tell them
         // else take control of the lab, cancel our requests, do exp, pass on lab
     
     /// Notify this lab that we no longer need an experiment done
-    member this.RCancelRequest cid = false
+    member this.RCancelRequest cid = ()
         //TODO If we don't have the lab, tell them who has it
         // else, remove them from the queue
         
