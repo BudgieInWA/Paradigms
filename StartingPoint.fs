@@ -97,6 +97,8 @@ and client (id, numLabs) =
     let myLab:lab option ref= ref None
     let myQueue:queue option ref = ref None
     
+    let IHave l = lastKnownCoord.[l] = id
+    
     // printing functions for this client
     let prStr (pre:string) str = prIndStr id (sprintf "Client%d: %s" id pre) str 
     let pr (pre:string) res = prStr pre (sprintf "%A" res);
@@ -130,6 +132,9 @@ and client (id, numLabs) =
         //TODO tell ppl their exp result
         (!result).Value
     
+    /// Passes our lab onto the client
+    //TODO make it get the client from the front of the queue
+    //TODO make it handle the case of the client rejecting the offer
     let passLabOn (c:client) =
         match !myLab, !myQueue with
             | Some l, Some q -> c.RPassLab (l, q) 
@@ -151,16 +156,17 @@ and client (id, numLabs) =
             | Some l -> doExpFromList [this.ClientID,exp] l delay
             | None -> false //TODO ask every lab holder that we be added to their lab's queue
             
-    /// Request that we be added to the queue
-    member this.RRequestLab (other:client) (e:exp) =
-        match !myQueue with
-            | None -> ()
-            | Some q ->
-                myQueue := Some <| q @ [(other.ClientID, e)]
-                if q = [] then passLabOn other
-                ()
-        //TODO if i have the lab, add them to my queue (then send it to them if the queue was empty) 
-        // else we reply with who we gave it to
+    /// Request that we be added to the lab's queue
+    member this.RRequestLab (other:client) (l:labID) (e:exp) : clientID option =
+        if IHave l then
+            match !myQueue with
+                | None -> raise <| Exception "I thought I had a lab, but I don't"
+                | Some q ->
+                    myQueue := Some <| q @ [(other.ClientID, e)]
+                    if q = [] then passLabOn other
+                    None
+        else
+            Some lastKnownCoord.[l]
 
     /// Pass a lab to this client        
     member this.RPassLab (msg:labMsg) = ()
