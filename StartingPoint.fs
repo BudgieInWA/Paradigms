@@ -166,7 +166,7 @@ and client (id, numLabs) =
             | None -> false //TODO ask every lab holder that we be added to their lab's queue
             
     /// Tell this client to add an experiment to the queue for the given lab (if they currently hold it).
-    /// Returns the id of the client that is now holding the lab if it has been passed on.
+    /// Returns the new lab owner if we don't own it anymore.
     member this.RAddToQueue (other:client) (l:labID) (e:exp) (d:int) : clientID option =
         if IHave l then
             match !myQueue with
@@ -175,8 +175,7 @@ and client (id, numLabs) =
                     myQueue := Some <| q @ [(other.ClientID, e, d)]
                     if q = [] then passLabOn ()
             None
-        else
-            Some lastKnownCoord.[l] // Tell other who we gave the lab to.
+        else Some lastKnownCoord.[l] // Tell other who we gave the lab to.
 
     /// Tell this client to take the lab. Returns true if it accepted it.
     member this.RTakeLab (msg:labMsg) : bool =
@@ -187,12 +186,12 @@ and client (id, numLabs) =
             //TODO cancel my requests
             doExpFromList (snd msg) (fst msg)
             true
-        else
-            false
+        else false
     
     /// Tell this client that we no longer need our experiment done.
-    member this.RRemoveFromQueue cid = ()
-        //TODO If we don't have the lab, tell them who has it
-        // else, remove them from the queue
-        
-
+    /// Returns the new lab owner if we don't own it anymore.
+    member this.RRemoveFromQueue (other:client) (l:labID) : clientID option =
+        if IHave l then
+            myQueue := Some <| List.filter (fun (c,e,d) -> c <> other.ClientID) (Option.get !myQueue)
+            None
+        else Some lastKnownCoord.[l]
