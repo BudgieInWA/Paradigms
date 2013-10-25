@@ -100,14 +100,35 @@ and labMsg = (lab*queue)
 and client (id, numLabs) =
     let clients:client[] ref = ref Array.empty
     let labs:lab[] ref = ref Array.empty
-    /// The client coordinating each lab, according to the most recent information known by this client.
-    let lastKnownCoord = Array.init numLabs (fun labID -> labID)  // Initially client i has lab i, for i=0..numLabs-1
+    
+    /// The lab that I own.
     let myLab:lab option ref= ref None
+    /// The queue for the lab that I own. Make sure that modifications are mirrored in the
+    /// effected clients' inQueueForLab.
     let myQueue:queue option ref = ref None
     
-    let result:expResult option ref = ref None
+    /// Are we in the queue for each lab? Make sure to keep in sync with myQueue from each other lab.
+    let inQueueForLab:bool[] = Array.init numLabs (fun i -> false)
+    /// The client coordinating each lab, according to the most recent information known by this client.
+    let lastKnownOwner = Array.init numLabs (fun labID -> labID)  // Initially client i has lab i
     
-    let IHave l = lastKnownCoord.[l] = id
+    
+    
+    let result:expResult option ref = ref None
+    let reportResult res = 
+        lock result <| fun() -> if Option.isSome (!result) then () // we have jumped in between a previous
+                                                                   // result being written and said result
+                                                                   // being returned
+                                else result := Some res
+                                     wakeWaiters result
+    let waitForResult () =
+        lock result <| fun() -> waitFor result
+                                let res = Option.get !result
+                                result := None;
+                                res
+    
+    // Helper functions.
+    let IHave l = lastKnownOwner.[l] = id
     
     // printing functions for this client
     let prStr (pre:string) str = prIndStr id (sprintf "Client%d: %s" id pre) str 
@@ -134,26 +155,45 @@ and client (id, numLabs) =
             elif expSize e <= expSize ee then (e,d,x) //TODO can we make this delay instead?
             else (ee,dd,xx)
         let best = List.fold myMax (List.head counts) (List.tail counts)
-        theLab.DoExp (second best) (first best) id (fun res -> result := Some res
-                                                               wakeWaiters result)
+        theLab.DoExp (second best) (first best) id (fun res ->
+            reportResult res
+            //TODO:
+            // for client in list of exps that our result suffices for
+            //     them.RTakeResult res
+            )
         
     
-    /// Passes our lab onto the client
+    /// Passes our lab onto the client at the front of the queue (removing clients that reject the
+    /// offer from the queue).
     let rec passLabOn () =
         match !myLab, !myQueue with
             | Some l, Some q ->
                 match q with
                     | [] -> ()
                     | (c,e,d) :: tail ->
-                        if (!clients).[c].RTakeLab (l, q) then Array.set lastKnownCoord l.LabID c
+                        if (!clients).[c].RTakeLab (l, q) then Array.set lastKnownOwner l.LabID c
                         else myQueue := Some tail; passLabOn ()
             | _ -> raise <| Exception "you've asked me to pass a lab on but I don't have one"
+            
+    /// Adds this client to the queue for a given lab, updating laskKnownOwner as needed.
+    let rec addToQueue (this:client) (l:labID) (e:exp) (d:int) =
+        match (!clients).[lastKnownOwner.[l]].RAddToQueue this l e d with
+            | Some newClient -> Array.set lastKnownOwner l newClient
+                                addToQueue this l e d
+            | None -> Array.set inQueueForLab l true
+            
+    /// Removes this client from the queue for a given lab, updating lastKnownOwner as needed.
+    let rec removeFromQueue (this:client) (l:labID) =
+        match (!clients).[lastKnownOwner.[l]].RRemoveFromQueue this l with
+            | Some newClient -> Array.set lastKnownOwner l newClient
+                                removeFromQueue this l
+            | None -> Array.set inQueueForLab l false
         
     member this.ClientID = id  // So other clients can find our ID easily
     member this.InitClients theClients theLabs =  
         clients:=theClients
         labs:=theLabs
-        if(Array.length !labs < id) then 
+        if(Array.length !labs < id) then
             myLab := Some (!labs).[id]
             myQueue := Some []
             
@@ -163,17 +203,9 @@ and client (id, numLabs) =
         //  The following code doesn't coordinate the clients at all.  Replace it with code that does.
         match !myLab with
             | Some l -> doExpFromList [this.ClientID,ex,delay] l // Assuming the lab is idle
-            | None ->
-                ignore [
-                    for l in 0..numLabs-1 do
-                        ignore <| (!clients).[lastKnownCoord.[l]].RAddToQueue this l ex delay
-                ]
+            | None -> ignore [ for l in 0..numLabs-1 do addToQueue this l ex delay ]
                 
-        lock result <| fun() -> waitFor result
-                                let res = Option.get !result
-                                result := None;
-                                res
-        //TODO tell everyone their exp result
+        waitForResult ()
             
     /// Tell this client to add an experiment to the queue for the given lab (if they currently hold it).
     /// Returns the new lab owner if we don't own it anymore.
@@ -183,7 +215,7 @@ and client (id, numLabs) =
             // If they are the only one in the queue, give them the lab right away.
             if List.length (Option.get !myQueue) = 1 then passLabOn ()
             None
-        else Some lastKnownCoord.[l] // Tell other who we gave the lab to.
+        else Some lastKnownOwner.[l] // Tell other who we gave the lab to.
 
     /// Tell this client that we no longer need our experiment done.
     /// Returns the new lab owner if we don't own it anymore.
@@ -191,16 +223,23 @@ and client (id, numLabs) =
         if IHave l then
             myQueue := Some <| List.filter (fun (c,e,d) -> c <> other.ClientID) (Option.get !myQueue)
             None
-        else Some lastKnownCoord.[l]
+        else Some lastKnownOwner.[l]
 
     /// Tell this client to take the lab. Returns true if it accepted it.
     member this.RTakeLab (msg:labMsg) : bool =
         if true then //TODO "if I want the lab"
             myLab := Some <| fst msg
             myQueue := Some <| snd msg
-            Array.set lastKnownCoord (fst msg).LabID id
+            Array.set lastKnownOwner (fst msg).LabID id
             //TODO cancel my requests
             doExpFromList (snd msg) (fst msg)
             true
-        else false
+        else
+            Array.set inQueueForLab (fst msg).LabID false
+            false
     
+    /// Tell this client we have a result for them (and have thus removed them from the queue).
+    member this.RTakeResult (r:expResult) (l:labID) =
+        reportResult r
+        Array.set inQueueForLab l false
+        
