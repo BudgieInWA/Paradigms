@@ -18,6 +18,7 @@ open PrintingPrettyStuff
 type labID = int
 type clientID = int
 
+type expResult = bool
 
 //////////  Project part 2 follows
 
@@ -37,7 +38,7 @@ type lab (labID, rules) =
     
     /// Send an experiment to a lab.  The continuation is called with the result of the experiment
     //  when it is complete.
-    member this.DoExp delay (exp:exp) clID (continuation : bool->unit) =  
+    member this.DoExp delay (exp:exp) clID (continuation : expResult->unit) =  
        startThread ("Lab"+ string labID) <| fun ()->
           if !busy then  let str = sprintf "BANG! lab%d explodes - host%d is already using it" labID (!usingClID).Value
                          prStamp -1 str "" //; failwith str // uncomment this to have the whole program fail.
@@ -92,8 +93,8 @@ let first  (a, _, _) = a
 let second (_, b, _) = b
 let third  (_, _, c) = c
 
-type queue = (clientID*exp*int) list
 
+type queue = (clientID*exp*int) list
 and labMsg = (lab*queue)   
 
 and client (id, numLabs) =
@@ -103,6 +104,8 @@ and client (id, numLabs) =
     let lastKnownCoord = Array.init numLabs (fun labID -> labID)  // Initially client i has lab i, for i=0..numLabs-1
     let myLab:lab option ref= ref None
     let myQueue:queue option ref = ref None
+    
+    let result:expResult option ref = ref None
     
     let IHave l = lastKnownCoord.[l] = id
     
@@ -131,12 +134,9 @@ and client (id, numLabs) =
             elif expSize e <= expSize ee then (e,d,x) //TODO can we make this delay instead?
             else (ee,dd,xx)
         let best = List.fold myMax (List.head counts) (List.tail counts)
-        let result = ref None
-        theLab.DoExp (second best) (first best) id (fun res -> result:=Some res)
-        while (!result).IsNone do ()
-        //TODO This is busy waiting, which isn't allowed - you'll need to fix it.
-        //TODO tell ppl their exp result
-        (!result).Value
+        theLab.DoExp (second best) (first best) id (fun res -> result := Some res
+                                                               wakeWaiters result)
+        
     
     /// Passes our lab onto the client
     let rec passLabOn () =
@@ -159,27 +159,35 @@ and client (id, numLabs) =
             
     
     /// This will be called each time a scientist on this host wants to submit an experiment.
-    member this.DoExp delay exp =
+    member this.DoExp delay ex : expResult =
         //  The following code doesn't coordinate the clients at all.  Replace it with code that does.
         match !myLab with
-            | Some l -> doExpFromList [this.ClientID,exp,delay] l
-            | None -> false //TODO ask every lab holder that we be added to their lab's queue
+            | Some l -> doExpFromList [this.ClientID,ex,delay] l // Assuming the lab is idle
+            | None ->
+                ignore [
+                    for l in 0..numLabs-1 do
+                        ignore <| (!clients).[lastKnownCoord.[l]].RAddToQueue this l ex delay
+                ]
+                
+        lock result <| fun() -> waitFor result
+                                let res = Option.get !result
+                                result := None;
+                                res
+        //TODO tell everyone their exp result
             
     /// Tell this client to add an experiment to the queue for the given lab (if they currently hold it).
     /// Returns the new lab owner if we don't own it anymore.
     member this.RAddToQueue (other:client) (l:labID) (e:exp) (d:int) : clientID option =
         if IHave l then
-            match !myQueue with
-                | None -> raise <| Exception "I thought I had a lab, but I don't"
-                | Some q ->
-                    myQueue := Some <| q @ [(other.ClientID, e, d)]
-                    if q = [] then passLabOn ()
+            myQueue := Some <| (Option.get !myQueue) @ [(other.ClientID, e, d)]
+            // If they are the only one in the queue, give them the lab right away.
+            if List.length (Option.get !myQueue) = 1 then passLabOn ()
             None
         else Some lastKnownCoord.[l] // Tell other who we gave the lab to.
 
     /// Tell this client to take the lab. Returns true if it accepted it.
     member this.RTakeLab (msg:labMsg) : bool =
-        if true then //TODO If I want the lab 
+        if true then //TODO "if I want the lab"
             myLab := Some <| fst msg
             myQueue := Some <| snd msg
             Array.set lastKnownCoord (fst msg).LabID id
