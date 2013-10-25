@@ -139,12 +139,14 @@ and client (id, numLabs) =
         (!result).Value
     
     /// Passes our lab onto the client
-    //TODO make it get the client from the front of the queue
-    //TODO make it handle the case of the client rejecting the offer
-    let passLabOn (c:client) =
+    let rec passLabOn () =
         match !myLab, !myQueue with
             | Some l, Some q ->
-                if c.RPassLab (l, q) then Array.set lastKnownCoord l.LabID c.ClientID
+                match q with
+                    | [] -> ()
+                    | (c,e,d) :: tail ->
+                        if (!clients).[c].RTakeLab (l, q) then Array.set lastKnownCoord l.LabID c
+                        else myQueue := Some tail; passLabOn ()
             | _ -> raise <| Exception "you've asked me to pass a lab on but I don't have one"
         
     member this.ClientID = id  // So other clients can find our ID easily
@@ -163,34 +165,33 @@ and client (id, numLabs) =
             | Some l -> doExpFromList [this.ClientID,exp,delay] l
             | None -> false //TODO ask every lab holder that we be added to their lab's queue
             
-    /// Request that we be added to the lab's queue
-    member this.RRequestLab (other:client) (l:labID) (e:exp) (d:int) : clientID option =
+    /// Tell this client to add an experiment to the queue for the given lab (if they currently hold it).
+    /// Returns the id of the client that is now holding the lab if it has been passed on.
+    member this.RAddToQueue (other:client) (l:labID) (e:exp) (d:int) : clientID option =
         if IHave l then
             match !myQueue with
                 | None -> raise <| Exception "I thought I had a lab, but I don't"
                 | Some q ->
                     myQueue := Some <| q @ [(other.ClientID, e, d)]
-                    if q = [] then passLabOn other
+                    if q = [] then passLabOn ()
             None
         else
             Some lastKnownCoord.[l] // Tell other who we gave the lab to.
 
-    /// Pass a lab to this client. Returns true if it accepted it.
-    member this.RPassLab (msg:labMsg) : bool =
+    /// Tell this client to take the lab. Returns true if it accepted it.
+    member this.RTakeLab (msg:labMsg) : bool =
         if true then //TODO If I want the lab 
             myLab := Some <| fst msg
             myQueue := Some <| snd msg
             Array.set lastKnownCoord (fst msg).LabID id
-            //TODO cancel requests
-            doExpFromList (snd msg) (fst msg) 
+            //TODO cancel my requests
+            doExpFromList (snd msg) (fst msg)
             true
         else
             false
-        //TODO If we don't want the lab anymore, tell them
-        // else take control of the lab, cancel our requests, do exp, pass on lab
     
-    /// Notify this lab that we no longer need an experiment done
-    member this.RCancelRequest cid = ()
+    /// Tell this client that we no longer need our experiment done.
+    member this.RRemoveFromQueue cid = ()
         //TODO If we don't have the lab, tell them who has it
         // else, remove them from the queue
         
