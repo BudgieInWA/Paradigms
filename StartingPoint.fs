@@ -185,6 +185,14 @@ and client (id, numLabs) =
             None
         else Some lastKnownCoord.[l] // Tell other who we gave the lab to.
 
+    /// Tell this client that we no longer need our experiment done.
+    /// Returns the new lab owner if we don't own it anymore.
+    member this.RRemoveFromQueue (other:client) (l:labID) : clientID option =
+        if IHave l then
+            myQueue := Some <| List.filter (fun (c,e,d) -> c <> other.ClientID) (Option.get !myQueue)
+            None
+        else Some lastKnownCoord.[l]
+
     /// Tell this client to take the lab. Returns true if it accepted it.
     member this.RTakeLab (msg:labMsg) : bool =
         if true then //TODO "if I want the lab"
@@ -196,10 +204,3 @@ and client (id, numLabs) =
             true
         else false
     
-    /// Tell this client that we no longer need our experiment done.
-    /// Returns the new lab owner if we don't own it anymore.
-    member this.RRemoveFromQueue (other:client) (l:labID) : clientID option =
-        if IHave l then
-            myQueue := Some <| List.filter (fun (c,e,d) -> c <> other.ClientID) (Option.get !myQueue)
-            None
-        else Some lastKnownCoord.[l]
