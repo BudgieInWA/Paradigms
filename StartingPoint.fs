@@ -33,6 +33,8 @@ type lab (labID, rules) =
 
     member this.Rules = rules
     
+    member this.LabID = labID
+    
     /// Send an experiment to a lab.  The continuation is called with the result of the experiment
     //  when it is complete.
     member this.DoExp delay (exp:exp) clID (continuation : bool->unit) =  
@@ -85,7 +87,12 @@ let hLock obj f = let onUnlock = ref (fun() -> ())
 
 /// A class for clients that coordinate and unify experiments before sending them to labs.  
 /// (You need to finish this class.)
-type queue = (clientID*exp) list
+
+let first  (a, _, _) = a
+let second (_, b, _) = b
+let third  (_, _, c) = c
+
+type queue = (clientID*exp*int) list
 
 and labMsg = (lab*queue)   
 
@@ -105,29 +112,28 @@ and client (id, numLabs) =
     
     /// Chooses an experiment to do from the list that suffices for ours (the first in the list) and
     /// the most others, then does it and sends results to people.
-    let doExpFromList (theQueue:queue) (theLab:lab) delay = 
-        let myExp = theQueue |> List.head |> snd
+    let doExpFromList (theQueue:queue) (theLab:lab) = 
+        let _, myExp, myDelay = List.head theQueue // The exp for this client.
         let otherCandidates =
-            [for (c,e) in theQueue do if suffices theLab.Rules (e,myExp) then yield e]
+            [for c, e, d in theQueue do if suffices theLab.Rules (e,myExp) then yield (e,d)]
         let candidates =
-            if List.head otherCandidates = myExp
-                then otherCandidates
-                else myExp::otherCandidates
+            if List.head otherCandidates = (myExp, myDelay) then otherCandidates
+            else (myExp, myDelay) :: otherCandidates
         let counts = [
-            for exp in candidates do 
-            yield exp, List.fold (fun x (c,e) -> if suffices theLab.Rules (exp, e) then x+1 else x )
-                                 0 theQueue
+            for (ex, delay) in candidates do
+                let addOneIfSuffices x (c,e,d) = if suffices theLab.Rules (ex, e) then x+1 else x
+                // Count how many experiments this one suffices for.
+                yield (ex, delay, List.fold addOneIfSuffices 0 theQueue) 
         ]
-        let best = List.fold (fun (e, x) (ee, xx) -> 
-                                 if x > xx then (e,x)
-                                 elif x < xx  then (ee,xx)
-                                 elif expSize e <= expSize ee then (e,x)
-                                 else (ee,xx))
-                             (List.head counts)
-                             (List.tail counts)
+        let myMax (e, d, x) (ee, dd, xx) =
+            if x > xx then (e,d,x)
+            elif x < xx  then (ee,dd,xx)
+            elif expSize e <= expSize ee then (e,d,x) //TODO can we make this delay instead?
+            else (ee,dd,xx)
+        let best = List.fold myMax (List.head counts) (List.tail counts)
         let result = ref None
-        theLab.DoExp delay (fst best) id (fun res -> result:=Some res)
-        while (!result).IsNone do ()  
+        theLab.DoExp (second best) (first best) id (fun res -> result:=Some res)
+        while (!result).IsNone do ()
         //TODO This is busy waiting, which isn't allowed - you'll need to fix it.
         //TODO tell ppl their exp result
         (!result).Value
@@ -137,7 +143,8 @@ and client (id, numLabs) =
     //TODO make it handle the case of the client rejecting the offer
     let passLabOn (c:client) =
         match !myLab, !myQueue with
-            | Some l, Some q -> c.RPassLab (l, q) 
+            | Some l, Some q ->
+                if c.RPassLab (l, q) then Array.set lastKnownCoord l.LabID c.ClientID
             | _ -> raise <| Exception "you've asked me to pass a lab on but I don't have one"
         
     member this.ClientID = id  // So other clients can find our ID easily
@@ -153,23 +160,32 @@ and client (id, numLabs) =
     member this.DoExp delay exp =
         //  The following code doesn't coordinate the clients at all.  Replace it with code that does.
         match !myLab with
-            | Some l -> doExpFromList [this.ClientID,exp] l delay
+            | Some l -> doExpFromList [this.ClientID,exp,delay] l
             | None -> false //TODO ask every lab holder that we be added to their lab's queue
             
     /// Request that we be added to the lab's queue
-    member this.RRequestLab (other:client) (l:labID) (e:exp) : clientID option =
+    member this.RRequestLab (other:client) (l:labID) (e:exp) (d:int) : clientID option =
         if IHave l then
             match !myQueue with
                 | None -> raise <| Exception "I thought I had a lab, but I don't"
                 | Some q ->
-                    myQueue := Some <| q @ [(other.ClientID, e)]
+                    myQueue := Some <| q @ [(other.ClientID, e, d)]
                     if q = [] then passLabOn other
-                    None
+            None
         else
-            Some lastKnownCoord.[l]
+            Some lastKnownCoord.[l] // Tell other who we gave the lab to.
 
-    /// Pass a lab to this client        
-    member this.RPassLab (msg:labMsg) = ()
+    /// Pass a lab to this client. Returns true if it accepted it.
+    member this.RPassLab (msg:labMsg) : bool =
+        if true then //TODO If I want the lab 
+            myLab := Some <| fst msg
+            myQueue := Some <| snd msg
+            Array.set lastKnownCoord (fst msg).LabID id
+            //TODO cancel requests
+            doExpFromList (snd msg) (fst msg) 
+            true
+        else
+            false
         //TODO If we don't want the lab anymore, tell them
         // else take control of the lab, cancel our requests, do exp, pass on lab
     
