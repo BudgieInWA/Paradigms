@@ -1,4 +1,4 @@
-﻿module Paradigms.StartingPoint
+﻿module Paradigms.Coordination
 
 #light
 
@@ -189,7 +189,7 @@ and client (id, numLabs) =
     member this.InitClients theClients theLabs =  
         clients:=theClients
         labs:=theLabs
-        if(Array.length !labs < id) then
+        if(id < Array.length !labs) then
             myLab := Some (!labs).[id]
             myQueue := Some []
             

@@ -18,9 +18,9 @@
         <String>PrintingPrettyStuff.fs</String>
         <String>Experiments.fs</String>
         <String>ExperimentsTest.fs</String>
-        <String>StartingPoint.fs</String>
-        <String>Program.fs</String>
+        <String>Coordination.fs</String>
         <String>CoordinationTest.fs</String>
+        <String>Program.fs</String>
       </BuildOrder>
     </BuildOrder>
   </PropertyGroup>
@@ -52,11 +52,11 @@
   <ItemGroup>
     <Compile Include="Experiments.fs" />
     <Compile Include="ExperimentsTest.fs" />
-    <Compile Include="StartingPoint.fs" />
     <Compile Include="Program.fs" />
     <Compile Include="CoordinationTest.fs" />
     <Compile Include="PrintingPrettyStuff.fs" />
     <Compile Include="Concurrency.fs" />
+    <Compile Include="Coordination.fs" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\FSharp\1.0\Microsoft.FSharp.Targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

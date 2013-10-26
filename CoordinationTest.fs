@@ -1,9 +1,9 @@
-module Paradigms.Coordination
+module Paradigms.CoordinationTests
 
 open System
 open System.Threading
 
-open Paradigms.StartingPoint
+open Paradigms.Coordination
 open Paradigms.Experiments
 open Paradigms.ExperimentsTest
 open Paradigms.PrintingPrettyStuff
@@ -77,7 +77,7 @@ do let clients, _ = mkClientsAndLabs 5 [rulesA; rulesB]
           ]
 
 
-randomTest 10 50 4 8 [rulesB; rulesB] |> ignore            // A smaller random test.
-randomTest 5 20 5 20 [rulesA; rulesB; rulesC] |> ignore    // A larger random test.
-
-
+let runRandomCoordinationTests () =
+    printf "werasdf"
+    randomTest 10 50 4 8 [rulesB; rulesB] |> ignore            // A smaller random test.
+    randomTest 5 20 5 20 [rulesA; rulesB; rulesC] |> ignore    // A larger random test.

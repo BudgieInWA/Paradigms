@@ -90,7 +90,7 @@ let rulesI = [rule11; rule15]
 let rulesJ = [rule11; rule16]
 let rulesK = [rule11; rule12; rule15]
 
-let runTests () =
+let runExperimentTests () =
 
     suffices [rule1] (A, A) |> prTest "suffices [rule1] (A, A)" true
     suffices [rule1] (A, B) |> prTest "suffices [rule1] (A, B)" false

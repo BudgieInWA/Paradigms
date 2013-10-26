@@ -1,7 +1,9 @@
 module Paradigms.Main
-open Paradigms.ExperimentsTest
+open ExperimentsTest
+open CoordinationTests
 
 [<EntryPoint>]
 let main args =
-    runTests ()
+    //runExperimentTests ()
+    runRandomCoordinationTests ()
     0
