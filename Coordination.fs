@@ -159,18 +159,6 @@ and client (id, numLabs) =
             myQueue := Some <| List.filter (fun x -> Option.isNone <| List.tryFind (sameClient x) bestO) theQueue
         )
     
-    /// Passes our lab onto the client at the front of the queue (removing clients that reject the
-    /// offer from the queue).
-    let rec passLabOn () =
-        match !myLab, !myQueue with
-            | Some l, Some q ->
-                match q with
-                    | [] -> ()
-                    | (c,e,d) :: tail ->
-                        if (!clients).[c].RTakeLab (l, q) then Array.set lastKnownOwner l.LabID c
-                        else myQueue := Some tail; passLabOn ()
-            | _ -> raise <| Exception "you've asked me to pass a lab on but I don't have one"
-            
     /// Adds this client to the queue for a given lab, updating laskKnownOwner as needed.
     let rec addToQueue (this:client) (l:labID) (e:exp) (d:int) =
         match (!clients).[lastKnownOwner.[l]].RAddToQueue this l e d with
@@ -184,7 +172,19 @@ and client (id, numLabs) =
             | Some newClient -> Array.set lastKnownOwner l newClient
                                 removeFromQueue this l
             | None -> Array.set inQueueForLab l false
-        
+    
+    /// Passes our lab onto the client at the front of the queue (removing clients that reject the
+    /// offer from the queue).
+    let rec passLabOn () =
+        match !myLab, !myQueue with
+            | Some l, Some q ->
+                match q with
+                    | [] -> ()
+                    | (c,e,d) :: tail ->
+                        if (!clients).[c].RTakeLab (l, q) then Array.set lastKnownOwner l.LabID c
+                        else myQueue := Some tail; passLabOn ()
+            | _ -> raise <| Exception "you've asked me to pass a lab on but I don't have one"
+                
     member this.ClientID = id  // So other clients can find our ID easily
     member this.InitClients theClients theLabs =  
         clients:=theClients
@@ -227,7 +227,7 @@ and client (id, numLabs) =
             myLab := Some <| fst msg
             myQueue := Some <| snd msg
             Array.set lastKnownOwner (fst msg).LabID id
-            //TODO cancel my requests
+            ignore [ for l in 0..numLabs-1 do if inQueueForLab.[l] then removeFromQueue this l ]
             doExpFromList (snd msg) (fst msg)
             true
         else
