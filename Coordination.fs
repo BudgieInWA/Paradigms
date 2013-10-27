@@ -93,6 +93,7 @@ let first  (a, _, _) = a
 let second (_, b, _) = b
 let third  (_, _, c) = c
 
+type clientState = Requesting | Canceling | Bored
 
 type queue = (clientID*exp*int) list
 and labMsg = (lab*queue)   
@@ -107,6 +108,8 @@ and client (id, numLabs) =
     /// effected clients' inQueueForLab.
     let myQueue:queue option ref = ref None
     
+    ///
+    let myState:clientState = Bored
     /// Are we in the queue for each lab? Make sure to keep in sync with myQueue from each other lab.
     let inQueueForLab:bool[] = Array.init numLabs (fun i -> false)
     /// The client coordinating each lab, according to the most recent information known by this client.
@@ -130,6 +133,14 @@ and client (id, numLabs) =
     // Helper functions.
     let IHave l = lastKnownOwner.[l] = id
     
+    /// Gets the locks for both this and other (in a consistant order) before running f.
+    let doSafely (this:client) (otherID:clientID) f =
+        if id < otherID then
+            lock this <| (fun () -> lock (!clients).[otherID] <| f) 
+        else
+            lock (!clients).[otherID] <| (fun ()-> lock this <| f)
+        
+
     // printing functions for this client
     let prStr (pre:string) str = prIndStr id (sprintf "Client%d: %s" id pre) str 
     let pr (pre:string) res = prStr pre (sprintf "%A" res);
@@ -196,7 +207,7 @@ and client (id, numLabs) =
     
     /// This will be called each time a scientist on this host wants to submit an experiment.
     member this.DoExp delay ex : expResult =
-        //  The following code doesn't coordinate the clients at all.  Replace it with code that does.
+        
         match !myLab with
             | Some l -> doExpFromList [this.ClientID,ex,delay] l // Assuming the lab is idle
             | None -> ignore [ for l in 0..numLabs-1 do addToQueue this l ex delay ]
