@@ -170,19 +170,26 @@ and client (id, numLabs) =
             myQueue := Some <| List.filter (fun x -> Option.isNone <| List.tryFind (sameClient x) bestO) theQueue
         )
     
-    /// Adds this client to the queue for a given lab, updating laskKnownOwner as needed.
+    /// Safely adds this client to the queue for a given lab, updating laskKnownOwner as needed.
     let rec addToQueue (this:client) (l:labID) (e:exp) (d:int) =
-        match (!clients).[lastKnownOwner.[l]].RAddToQueue this l e d with
-            | Some newClient -> Array.set lastKnownOwner l newClient
-                                addToQueue this l e d
-            | None -> Array.set inQueueForLab l true
+        let cid = lastKnownOwner.[l];
+        if not (doSafely this cid (fun () -> // now we have a lock with cid
+            if lastKnownOwner.[l] <> cid then false // but lastKnownOwner might have changed before we got the lock
+            else match (!clients).[cid].RAddToQueue this l e d with
+                        | Some newClient -> Array.set lastKnownOwner l newClient; false
+                        | None -> Array.set inQueueForLab l true; true ))
+        then addToQueue this l e d
+
             
     /// Removes this client from the queue for a given lab, updating lastKnownOwner as needed.
     let rec removeFromQueue (this:client) (l:labID) =
-        match (!clients).[lastKnownOwner.[l]].RRemoveFromQueue this l with
-            | Some newClient -> Array.set lastKnownOwner l newClient
-                                removeFromQueue this l
-            | None -> Array.set inQueueForLab l false
+        let cid = lastKnownOwner.[l];
+        if not (doSafely this cid (fun () -> // now we have a lock with cid
+            if lastKnownOwner.[l] <> cid then false // but lastKnownOwner might have changed before we got the lock
+            else match (!clients).[lastKnownOwner.[l]].RRemoveFromQueue this l with
+                        | Some newClient -> Array.set lastKnownOwner l newClient; true
+                        | None -> Array.set inQueueForLab l false; false ))
+        then removeFromQueue this l
     
     /// Passes our lab onto the client at the front of the queue (removing clients that reject the
     /// offer from the queue).
@@ -209,8 +216,8 @@ and client (id, numLabs) =
     member this.DoExp delay ex : expResult =
         
         match !myLab with
-            | Some l -> doExpFromList [this.ClientID,ex,delay] l // Assuming the lab is idle
-            | None -> ignore [ for l in 0..numLabs-1 do addToQueue this l ex delay ]
+            | Some l -> lock this <| fun () -> doExpFromList [this.ClientID,ex,delay] l // Assuming the lab is idle
+            | None -> ignore [ for l in 0..numLabs-1 do addToQueue this l ex delay ] // TODO async
                 
         waitForResult ()
             
