@@ -219,7 +219,6 @@ and client (id, numLabs) =
                         | Some newClient -> Array.set lastKnownOwner l newClient; prStr "lab moved" ""; false
                         | None -> Array.set inQueueForLab l true; prStr "accepted" ""; true
         )) then aAddToQueue this l e d
-        //TODO notify that the async is done
             
     /// Safely removes this client from the queue for a given lab, updating lastKnownOwner as needed.
     let rec aRemoveFromQueue (this:client) (l:labID) =
@@ -231,10 +230,9 @@ and client (id, numLabs) =
             if lastKnownOwner.[l] <> cid then prStr "lastKnownOwner changed" ""; false // but lastKnownOwner might have changed before we got the lock
             elif not inQueueForLab.[l] then pr "I'm not actually in q for lab" l; true
             else match (!clients).[lastKnownOwner.[l]].RRemoveFromQueue this l with
-                        | Some newClient -> Array.set lastKnownOwner l newClient; prStr "removed" ""; true
-                        | None -> Array.set inQueueForLab l false; prStr "lab moved" ""; false )
+                        | Some newClient -> Array.set lastKnownOwner l newClient; prStr "lab moved" ""; false
+                        | None -> Array.set inQueueForLab l false; prStr "removed" ""; true )
         ) then aRemoveFromQueue this l
-        //TODO notify that async is done
     
     let cancelAll (this:client) =
         lock this <| fun () ->
