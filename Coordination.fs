@@ -264,8 +264,11 @@ and client (id, numLabs) =
             
         let _, myExp, myDelay = List.head theQueue // The exp for this client.
         let otherCandidates = List.filter (fun (_,e,_) -> suffices theLab.Rules (e, myExp)) theQueue
-        let candidates = if first <| List.head otherCandidates = id then otherCandidates
+        let candidates = if otherCandidates <> [] && first <| List.head otherCandidates = id then otherCandidates
                             else List.head theQueue :: otherCandidates
+
+        // TODO if a candidate exp doesn't suffice for iteslf, it will not be counted in it's "others" list
+        // This means that we wont tell the owner about the result :) So we should fix that
         let others = List.map (fun (c, ex, delay) ->
                                     (c, ex, delay, List.filter (fun (_,e,_) -> suffices theLab.Rules (ex, e)) theQueue) )
                                 candidates
@@ -278,7 +281,7 @@ and client (id, numLabs) =
         // Remove done experiments from the queue.
         let sameClient (c,_,_) (cc,_,_) = c = cc
         myQueue := Some <| List.filter (fun x -> Option.isNone <| List.tryFind (sameClient x) bestO) theQueue
-            
+        
         myLabState := Using
 
         // tell everyone to expect result
