@@ -135,6 +135,7 @@ and client (id, numLabs) =
         lock this <| fun () ->
             pr "CheckIfBored" this.ClientID
             if !cancelsDone && Option.isSome !result then
+                pr "I'm Bored" this.ClientID
                 myState := Bored
                 result := None
                 //TODO wake up any DoExp threads that are waiting for a bored state
@@ -142,12 +143,13 @@ and client (id, numLabs) =
     
    
     let reportResult res = 
-        prStr "result reported" ""
         lock result <| fun() -> if Option.isSome (!result) then () // we have jumped in between a previous
                                                                    // result being written and said result
                                                                    // being returned
                                 else result := Some res
+                                     prStr "result reported" ""
                                      wakeWaiters result
+
     let waitForResult (this:client) =
         lock result <| fun() -> waitFor result
                                 pr "waitForResult with client" this.ClientID
@@ -182,11 +184,10 @@ and client (id, numLabs) =
     let rec passLabOn () =
         let co = (peekClient !myQueue)
         if (Option.isNone co) || not (doSafely id co.Value <| (fun () -> // true iff done
-            pr "passLabOn with myLab = " !myLab
             if !expRunning then true
             elif co <> peekClient !myQueue then false
             elif (!clients).[co.Value].RTakeLab (Option.get !myLab, Option.get !myQueue) then
-                Array.set lastKnownOwner (!myLab).Value.LabID co.Value; true
+                Array.set lastKnownOwner (!myLab).Value.LabID co.Value; pr "passLabOn with myLab = " (!myLab).Value.LabID; true
             else myQueue := Some (!myQueue).Value.Tail; false ))
         then passLabOn ()
 
@@ -195,12 +196,11 @@ and client (id, numLabs) =
     let rec aAddToQueue (this:client) (l:labID) (e:exp) (d:int) =
         let cid = lastKnownOwner.[l];
         if not (doSafely id cid (fun () ->
-            pr ("aAddToQueue with client " + (string cid) + " looking for lab") l
             if !myState <> Requesting then true // We were too late, we are already have a plan for getting a result.
             elif lastKnownOwner.[l] <> cid then false // but lastKnownOwner might have changed before we got the lock
             else match (!clients).[cid].RAddToQueue this l e d with
                         | Some newClient -> Array.set lastKnownOwner l newClient; false
-                        | None -> Array.set inQueueForLab l true; true )
+                        | None -> Array.set inQueueForLab l true; pr ("aAddToQueue with client " + (string cid) + " looking for lab") l;true )
         ) then aAddToQueue this l e d
         //TODO notify that the async is done
             
@@ -210,19 +210,18 @@ and client (id, numLabs) =
 
         let cid = lastKnownOwner.[l];
         if not (doSafely id cid (fun () -> // now we have a lock with cid
-            pr ("aRemoveFromQueue with client " + string cid + " and lab") l
             if lastKnownOwner.[l] <> cid then false // but lastKnownOwner might have changed before we got the lock
             elif not inQueueForLab.[l] then true
             else match (!clients).[lastKnownOwner.[l]].RRemoveFromQueue this l with
-                        | Some newClient -> Array.set lastKnownOwner l newClient; true
+                        | Some newClient -> Array.set lastKnownOwner l newClient; pr ("aRemoveFromQueue with client " + string cid + " and lab") l; true
                         | None -> Array.set inQueueForLab l false; false )
         ) then aRemoveFromQueue this l
         //TODO notify that async is done
     
     let cancelAll (this:client) =
         lock this <| fun () ->
-            pr "CancelAll" ""
             if !myState = Requesting then
+                pr "CancelAll" this
                 myState := Canceling
                 cancelsDone := false
                 Async.Start <| async {
@@ -291,10 +290,10 @@ and client (id, numLabs) =
     /// This will be called each time a scientist on this host wants to submit an experiment.
     member this.DoExp delay ex : expResult =
         lock this <| fun () ->
-            prStr "Doing exp" " :) "
             match !myState with
                 | Bored ->
                     myState := Requesting
+                    prStr "Trying to do exp" " :) "
                     match !myLab with
                         | Some l -> doExpFromList this [this.ClientID,ex,delay] l // Assuming the lab is idle
                         | None -> ignore [ for l in 0..numLabs-1 do Async.Start <| async { aAddToQueue this l ex delay } ]
@@ -305,8 +304,8 @@ and client (id, numLabs) =
     /// Returns the new lab owner if we don't own it anymore.
     member this.RAddToQueue (other:client) (l:labID) (e:exp) (d:int) : clientID option =
         doSafely id other.ClientID <| (fun () ->
-            pr ("RAddToQueue for lab "+string l+" with client") other.ClientID
             if IHave l then
+                pr ("RAddToQueue for lab "+string l+" with client") other.ClientID
                 myQueue := Some <| (Option.get !myQueue) @ [(other.ClientID, e, d)]
                 // If they are the only one in the queue, give them the lab right away.
                 Async.Start <| async { passLabOn () }
@@ -318,8 +317,8 @@ and client (id, numLabs) =
     /// Returns the new lab owner if we don't own the lab anymore.
     member this.RRemoveFromQueue (other:client) (l:labID) : clientID option =
         doSafely id other.ClientID <| (fun () -> 
-            pr ("RRemoveFromQueue for lab "+string l+" with client") other.ClientID
             if IHave l then
+                pr ("RRemoveFromQueue for lab "+string l+" with client") other.ClientID
                 myQueue := Some <| List.filter (fun (c,e,d) -> c <> other.ClientID) (Option.get !myQueue)
                 None
             else Some lastKnownOwner.[l]
@@ -328,9 +327,9 @@ and client (id, numLabs) =
     /// Tell this client to take the lab. Returns true if it accepted it.
     member this.RTakeLab (msg:labMsg) : bool =
         lock this <| (fun () ->
-            pr "RTakeLab" msg
             Array.set inQueueForLab (fst msg).LabID false
             if true then
+                pr "RTakeLab" (fst msg).LabID
                 myLab := Some <| fst msg
                 myQueue := Some <| snd msg
                 Array.set lastKnownOwner (fst msg).LabID id
@@ -349,8 +348,8 @@ and client (id, numLabs) =
 
     member this.RExpectResult (l:labID) = 
         lock this (fun () ->
-            pr "RExpectResult with lab " l
             if !myState = Requesting then
+                pr "RExpectResult with lab " l
                 Array.set inQueueForLab l false
                 cancelAll this
                 true
