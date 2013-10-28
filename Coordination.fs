@@ -241,33 +241,30 @@ and client (id, numLabs) =
     
     /// Chooses an experiment to do from the list that suffices for ours (the first in the list) and
     /// the most others, then does it and sends results to people.
-    let doExpFromList this (theQueue:queue) (theLab:lab) =
-        let bestC, bestE, bestD, bestO = lock this <| (fun() -> 
-            if !myRequestState <> Requesting then raise <| Exception "doExpFromList called while not in requesting state"
-            if !myLabState <> Idle then raise <| Exception "doExpFromList called while lab not idle"
-            pr "DoExpFromList with lab" theLab.LabID
+    /// Must have a lock on this
+    let startUsingLab this (theQueue:queue) (theLab:lab) =
+        if !myLabState <> Idle then raise <| Exception "startUsingLab called while lab not idle"
+        pr "startUsingLab with lab" theLab.LabID
             
-            let _, myExp, myDelay = List.head theQueue // The exp for this client.
-            let otherCandidates = List.filter (fun (_,e,_) -> suffices theLab.Rules (e, myExp)) theQueue
-            let candidates = if first <| List.head otherCandidates = id then otherCandidates
-                             else List.head theQueue :: otherCandidates
-            let others = List.map (fun (c, ex, delay) ->
-                                       (c, ex, delay, List.filter (fun (_,e,_) -> suffices theLab.Rules (ex, e)) theQueue) )
-                                  candidates
-            let betterOf (c, e, d, o) (cc, ee, dd, oo) =
-                if List.length o > List.length oo then (c, e,d,o)
-                elif List.length o < List.length oo  then (cc, ee,dd,oo)
-                elif expSize e <= expSize ee then (c, e,d,o) //TODO can we make this delay instead?
-                else (cc, ee, dd, oo)
-            let bestC, bestE, bestD, bestO = List.fold betterOf (List.head others) (List.tail others)
-            // Remove done experiments from the queue.
-            let sameClient (c,_,_) (cc,_,_) = c = cc
-            myQueue := Some <| List.filter (fun x -> Option.isNone <| List.tryFind (sameClient x) bestO) theQueue
+        let _, myExp, myDelay = List.head theQueue // The exp for this client.
+        let otherCandidates = List.filter (fun (_,e,_) -> suffices theLab.Rules (e, myExp)) theQueue
+        let candidates = if first <| List.head otherCandidates = id then otherCandidates
+                            else List.head theQueue :: otherCandidates
+        let others = List.map (fun (c, ex, delay) ->
+                                    (c, ex, delay, List.filter (fun (_,e,_) -> suffices theLab.Rules (ex, e)) theQueue) )
+                                candidates
+        let betterOf (c, e, d, o) (cc, ee, dd, oo) =
+            if List.length o > List.length oo then (c, e,d,o)
+            elif List.length o < List.length oo  then (cc, ee,dd,oo)
+            elif expSize e <= expSize ee then (c, e,d,o) //TODO can we make this delay instead?
+            else (cc, ee, dd, oo)
+        let bestC, bestE, bestD, bestO = List.fold betterOf (List.head others) (List.tail others)
+        // Remove done experiments from the queue.
+        let sameClient (c,_,_) (cc,_,_) = c = cc
+        myQueue := Some <| List.filter (fun x -> Option.isNone <| List.tryFind (sameClient x) bestO) theQueue
             
-            myLabState := Using
-            cancelAll this
-            bestC, bestE, bestD, bestO
-        )
+        myLabState := Using
+
         // tell everyone to expect result
         let reportingQ = List.filter (fun (c, _, _)  ->
                                           doSafely id c (fun () -> (!clients).[c].RExpectResult theLab.LabID))
@@ -298,8 +295,8 @@ and client (id, numLabs) =
             match !myRequestState, !myLabState with
                 | Bored, Idle ->
                     prStr "Doing exp" ":)"
-                    myRequestState := Requesting
-                    doExpFromList this [this.ClientID,ex,delay] (!myLab).Value
+                    myRequestState := Bored
+                    startUsingLab this [this.ClientID,ex,delay] (!myLab).Value
                 | Bored, Absent ->
                     prStr "Requesting a lab" " :( "
                     myRequestState := Requesting
@@ -314,11 +311,11 @@ and client (id, numLabs) =
         pr ("RAddToQueue for lab "+string l+" from client") other.ClientID
         if IHave l then
             myQueue := Some <| (Option.get !myQueue) @ [(other.ClientID, e, d)]
-            // If they are the only one in the queue, give them the lab right away.
             Async.Start <| async { passLabOn () }
             pr ("added client "+(string other.ClientID)+" to Q for lab") l
             None
         else
+            pr "not adding because we don't have lab" l
             Some lastKnownOwner.[l] // Tell other who we gave the lab to.
 
     /// Tell this client that we no longer need our experiment done.
@@ -328,7 +325,9 @@ and client (id, numLabs) =
             pr ("RRemoveFromQueue for lab "+string l+" from client") other.ClientID
             myQueue := Some <| List.filter (fun (c,e,d) -> c <> other.ClientID) (Option.get !myQueue)
             None
-        else Some lastKnownOwner.[l]
+        else
+            pr "not removing because we don't have lab" l
+            Some lastKnownOwner.[l]
 
     /// Tell this client to take the lab. Returns true if it accepted it.
     member this.RTakeLab (msg:labMsg) : bool =
@@ -339,18 +338,18 @@ and client (id, numLabs) =
                 myLab := Some <| fst msg
                 myQueue := Some <| snd msg
                 Array.set lastKnownOwner (fst msg).LabID id
-                myRequestState := Requesting //TODO check this
+                cancelAll this
                 myLabState := Idle
-                doExpFromList this (snd msg) (fst msg)
+                startUsingLab this (!myQueue).Value (!myLab).Value
                 true
-            | _ -> pr "Rejecting the lab" msg;false
+            | _ -> pr "Rejecting the lab" msg; false
     
     /// Tell this client we have a result for them (and have thus removed them from the queue).
     member this.RReportResult (r:expResult) (l:labID) =
         pr "RREportResult with lab " l
         reportResult r
 
-    member this.RExpectResult (l:labID) = 
+    member this.RExpectResult (l:labID) =
         match !myRequestState, !myLabState with
             | Requesting, Searching ->
                 pr "RExpectResult with lab " l
