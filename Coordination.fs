@@ -139,8 +139,8 @@ and client (id, numLabs) =
     
     
     // printing functions for this client
-    let prStr (pre:string) str = prIndStr id (sprintf "Client%d: %s" id pre) str 
-    let pr (pre:string) res = prStr pre (sprintf "%A" res);
+    let prStr (pre:string) str = (); //prIndStr id (sprintf "Client%d: %s" id pre) str 
+    let pr (pre:string) res = ()//(prStr pre (sprintf "%A" res);
     
     /// Should we wait before starting a new experiment?
     /// Be sure to lock all modifications to these vars. TODO
@@ -177,13 +177,13 @@ and client (id, numLabs) =
     let rec doSafely (thisID:clientID) (otherID:clientID) f =
         if thisID < otherID then doSafely otherID thisID f
         else
-            prStamp -1 (sprintf "Try   locks with %d, %d" thisID otherID) ""
+            //prStamp -1 (sprintf "Try   locks with %d, %d" thisID otherID) ""
             let this = (!clients).[thisID]
             let other = (!clients).[otherID]
             
-            let ret = lock this <| (fun () -> lock other <| fun () ->   prStamp -1 (sprintf "Got   locks with %d, %d" thisID otherID) ""
+            let ret = lock this <| (fun () -> lock other <| fun () ->   //prStamp -1 (sprintf "Got   locks with %d, %d" thisID otherID) ""
                                                                         f ()) 
-            prStamp -1 (sprintf "Done  locks with %d, %d" thisID otherID) ""
+            //prStamp -1 (sprintf "Done  locks with %d, %d" thisID otherID) ""
             ret
 
         
@@ -297,7 +297,7 @@ and client (id, numLabs) =
             List.map (fun c -> async {
                     doSafely id c <| fun () ->
                         if Option.isNone !result && Set.contains c !clientWantsOurResult then // if not, we're too late
-                            prStr ("Telling client " + string c + " to expect our result") ""
+                            //prStr ("Telling client " + string c + " to expect our result") ""
                             (!clients).[c].RExpectResult this theLab.LabID
                 }) <| Set.toList !clientWantsOurResult
             |> Async.Parallel
@@ -306,7 +306,7 @@ and client (id, numLabs) =
             
             
             lock restartLock <| fun () -> tellingClientsToExpectResults := false
-                                          prStr "done telling clients to expect results" ""
+                                       //   prStr "done telling clients to expect results" ""
                                           wakeWaiters restartLock
         }
         |> Async.Start
@@ -428,7 +428,6 @@ and client (id, numLabs) =
     /// Tell this client we have a result for them (and have thus removed them from the queue).
     member this.RReportResult (other:client) (r:expResult) (l:labID) = 
         pr ("RReportResult for lab "+string l+" from client") other.ClientID
-        assert inQueueForLab.[l]
         reportResult r
         match !myRequestState, !myLabState with
             | Requesting, Searching ->
