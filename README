@@ -4,10 +4,12 @@ Ben Ritter (20496887)
 Wan Ying Goh (20784663)
 
 The program is split over multiple files. :
+	Concurrency.fs - Code that does concurrency stuff
+	PrintingPrettyStuff.fs - Code that does printing for the events as they occured
 	Experiments.fs - Implementation of experiments and the suffices funtion
 	ExperimentsTest.fs - Code that tests the experiment implementation
-	StartingPoint.fs - Code from the starting point that we haven't found a home
-	                   for yet
+	Coordination.fs - Implementation of the coordination of clients.
+	CoordinationTest.fs- Code that tests the coordination implementation
 	Program.fs - The program entry point
 
 # Building #
