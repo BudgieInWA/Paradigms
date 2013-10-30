@@ -117,7 +117,7 @@ and client (id, numLabs) =
     let tellingClientsToExpectResults = ref false
     let tellingClientsResults = ref false
     let clientWantsOurResult:Set<clientID> ref = ref Set.empty
-
+    let lastUsedLab = ref -1
     /// Our current state
     let myRequestState = ref Bored
     let myLabState     = if id < numLabs then ref Idle else ref Absent
@@ -195,6 +195,7 @@ and client (id, numLabs) =
             if !myLabState <> Idle then prStr "done, I'm not idle" ""; true
             elif co <> peekClient !myQueue then prStr "queue changed, going again" ""; false
             elif (!clients).[co.Value].RTakeLab this (Option.get !myLab, Option.get !myQueue) then
+                clientWantsOurResult := (!clientWantsOurResult).Remove co.Value // CO has accepted the lab, so they don't want our result
                 Array.set lastKnownOwner (!myLab).Value.LabID co.Value
                 pr "Passed on to client" co.Value
                 lock restartLock <| fun() ->
@@ -261,21 +262,19 @@ and client (id, numLabs) =
     let startUsingLab this (theQueue:queue) (theLab:lab) =
         if !myLabState <> Idle then raise <| Exception "startUsingLab called while lab not idle"
         pr "startUsingLab with lab" theLab.LabID
-            
-        let _, myExp, myDelay = List.head theQueue // The exp for this client.
-        let otherCandidates = List.filter (fun (_,e,_) -> suffices theLab.Rules (e, myExp)) theQueue
-        let candidates = if otherCandidates <> [] && first <| List.head otherCandidates = id then otherCandidates
-                            else List.head theQueue :: otherCandidates
+        
+        let myID, myExp, myDelay = List.head theQueue // The exp for this client.
+        if myID <> id then raise <| Exception "Called startUsingLab when we aren't at the front of the queue"
+        let candidates = List.filter (fun (c,e,_) -> c = myID || suffices theLab.Rules (e, myExp)) theQueue // Experiments that we are considering doing.
 
-        // TODO if a candidate exp doesn't suffice for iteslf, it will not be counted in it's "others" list
-        // This means that we wont tell the owner about the result :) So we should fix that
-        let others = List.map (fun (c, ex, delay) ->
-                                    (c, ex, delay, List.filter (fun (_,e,_) -> suffices theLab.Rules (ex, e)) theQueue) )
+        // Calculate the set of experiments that each candidate will suffice for.
+        let others = List.map (fun (c, e, delay) ->
+                                    (c, e, delay, List.filter (fun (cc,ee,_) -> cc = c || suffices theLab.Rules (e, ee)) theQueue) )
                                 candidates
         let betterOf (c, e, d, o) (cc, ee, dd, oo) =
             if List.length o > List.length oo then (c, e,d,o)
             elif List.length o < List.length oo  then (cc, ee,dd,oo)
-            elif expSize e <= expSize ee then (c, e,d,o) //TODO can we make this delay instead?
+            elif expSize e <= expSize ee then (c, e,d,o)
             else (cc, ee, dd, oo)
         let bestC, bestE, bestD, bestO = List.fold betterOf (List.head others) (List.tail others)
         // Remove done experiments from the queue.
@@ -287,6 +286,7 @@ and client (id, numLabs) =
         // tell everyone to expect result
         tellingClientsToExpectResults := true
         clientWantsOurResult := new Set<clientID> ( [ for (c,_,_) in bestO do if c <> id then yield c ] )
+        lastUsedLab := theLab.LabID
         async {
             List.map (fun (c, _, _)  -> async {
                     doSafely id c <| fun () ->
@@ -325,7 +325,7 @@ and client (id, numLabs) =
             
                     
                     lock restartLock <| fun() -> tellingClientsResults := false
-                                                 prStr " done tellign clients results" ""
+                                                 prStr " done telling clients results" ""
                                                  wakeWaiters restartLock
                 }
                 |> Async.Start
@@ -391,6 +391,8 @@ and client (id, numLabs) =
             clientWantsOurResult := (!clientWantsOurResult).Remove other.ClientID
             None
         else
+            // If the client is canceling the use of the lab that we did our last exp on, we know they don't want our result.
+            if l = !lastUsedLab then clientWantsOurResult := (!clientWantsOurResult).Remove other.ClientID
             pr ("not removing because we don't have lab" + string l+" from client") other.ClientID
             Some lastKnownOwner.[l]
 
