@@ -156,7 +156,7 @@ and client (id, numLabs) =
                             || Array.exists (fun b -> b) inQueueForLab
 
     let reportResult res = 
-        lock result <| fun() -> if Option.isSome (!result) then prStr "result igored" "";() // we have jumped in between a previous
+        lock result <| fun() -> if Option.isSome (!result) then prStr "result ignored" "";() // we have jumped in between a previous
                                                                    // result being written and said result
                                                                    // being returned
                                 else result := Some res
@@ -177,7 +177,7 @@ and client (id, numLabs) =
                             | [] -> None
                             | (c,_,_) :: tail -> Some c
 
-    /// Gets the locks for both this and other (in a consistant order) before running f.
+    /// Gets the locks for both this and other (in a consistent order) before running f.
     let rec doSafely (thisID:clientID) (otherID:clientID) f =
         if thisID < otherID then doSafely otherID thisID f
         else
@@ -201,7 +201,7 @@ and client (id, numLabs) =
         let co = (peekClient !myQueue)
         if (Option.isNone co) then prStr "passLabOn but Q is empty," "stopping"; ()
         elif not (doSafely id co.Value <| fun () -> // true iff done
-            prStr "passLabOn" ""
+            prStr "PassLabOn" ""
             if !myLabState <> Idle then prStr "done, I'm not idle" ""; true
             elif co <> peekClient !myQueue then prStr "queue changed, going again" ""; false
             elif (!clients).[co.Value].RTakeLab this (Option.get !myLab, Option.get !myQueue) then
@@ -301,7 +301,7 @@ and client (id, numLabs) =
             List.map (fun c -> async {
                     doSafely id c <| fun () ->
                         if Option.isNone !result && Set.contains c !clientWantsOurResult then // if not, we're too late
-                            //prStr ("Telling client " + string c + " to expect our result") ""
+                            prStr ("Telling client " + string c + " to expect our result") ""
                             (!clients).[c].RExpectResult this theLab.LabID
                 }) <| Set.toList !clientWantsOurResult
             |> Async.Parallel
@@ -310,7 +310,7 @@ and client (id, numLabs) =
             
             
             lock restartLock <| fun () -> tellingClientsToExpectResults := false
-                                       //   prStr "done telling clients to expect results" ""
+                                          prStr "done telling clients to expect results" ""
                                           wakeWaiters restartLock
         }
         |> Async.Start
@@ -370,7 +370,7 @@ and client (id, numLabs) =
                         // We jump the queue here, because it would be harder not to.
                         myQueue := Some <| [this.ClientID,ex,delay] @ (!myQueue).Value
                         startUsingLab this (!myQueue).Value (!myLab).Value
-                        pr "done startUsingLab, now about to wait" ""
+                        prStr "done startUsingLab, now about to wait" ""
                     | Bored, Absent ->
                         prStr "Requesting a lab" " :( "
                         result := None
