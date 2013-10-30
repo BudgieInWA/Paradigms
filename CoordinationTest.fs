@@ -78,6 +78,5 @@ do let clients, _ = mkClientsAndLabs 5 [rulesA; rulesB]
 
 
 let runRandomCoordinationTests () =
-    printf "werasdf"
-    randomTest 10 50 4 8 [rulesB; rulesB] |> ignore            // A smaller random test.
-    randomTest 5 20 5 20 [rulesA; rulesB; rulesC] |> ignore    // A larger random test.
+    while true do randomTest 10 50 4 8 [rulesB; rulesB] |> ignore            // A smaller random test.
+   // randomTest 5 20 5 20 [rulesA; rulesB; rulesC] |> ignore    // A larger random test.
