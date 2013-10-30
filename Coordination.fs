@@ -41,7 +41,7 @@ type lab (labID, rules) =
     member this.DoExp delay (exp:exp) clID (continuation : expResult->unit) =
        prStamp -1 (sprintf "Lab %d doing exp for client %d" labID clID) "" 
        startThread ("Lab"+ string labID) <| fun ()->
-          lock this <| fun () -> 
+          lock this <| fun () -> // We added this lock (and the next) to stop NPE in the printing when we were exploding labs.
               if !busy then  let str = sprintf "BANG! lab%d explodes - host%d is already using it" labID (!usingClID).Value
                              prStamp -1 str "" //; failwith str // uncomment this to have the whole program fail.
               usingClID := Some clID
@@ -116,6 +116,7 @@ and client (id, numLabs) =
     // Self explaining, used to delay starting of new experiments prematurely
     let tellingClientsToExpectResults = ref false
     let tellingClientsResults = ref false
+    let askingForLabs = ref false
     
     /// Clients that we need to give a result to.
     let clientWantsOurResult:Set<clientID> ref = ref Set.empty
@@ -146,6 +147,7 @@ and client (id, numLabs) =
     /// Be sure to lock all modifications to these vars. TODO
     let cannotStartExp () =    !tellingClientsResults
                             || !tellingClientsToExpectResults
+                            || !askingForLabs
                             || !myRequestState <> Bored
                             || !myLabState = Searching
                             || !myLabState = Using
@@ -370,9 +372,18 @@ and client (id, numLabs) =
                     | Bored, Absent ->
                         prStr "Requesting a lab" " :( "
                         result := None
-                        myRequestState := Requesting
-                        myLabState := Searching
-                        ignore [ for l in 0..numLabs-1 do Async.Start <| async { prStr "started request async" ""; aAddToQueue this l ex delay } ]
+                        lock restartLock <| fun () ->
+                            myRequestState := Requesting
+                            myLabState := Searching
+                            askingForLabs := true
+                            async {
+                                [ for l in 0..numLabs-1 do yield async { prStr "started request async" ""; aAddToQueue this l ex delay } ]
+                                |> Async.Parallel
+                                |> Async.Ignore
+                                |> Async.RunSynchronously
+                                lock restartLock <| fun () -> askingForLabs := false; wakeWaiters restartLock
+                            }
+                            |> Async.Start
                                 
                     | _ -> raise <| Exception "SHOULD NOT BE HERE (client.DoExp)"
         waitForResult this
@@ -428,6 +439,7 @@ and client (id, numLabs) =
     /// Tell this client we have a result for them (and have thus removed them from the queue).
     member this.RReportResult (other:client) (r:expResult) (l:labID) = 
         pr ("RReportResult for lab "+string l+" from client") other.ClientID
+        assert inQueueForLab.[l]
         reportResult r
         match !myRequestState, !myLabState with
             | Requesting, Searching ->
