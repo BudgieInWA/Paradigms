@@ -3,7 +3,7 @@ Authors:
 Ben Ritter (20496887)
 Wan Ying Goh (20784663)
 
-The program is split over multiple files. :
+The program is split over multiple files:
 	Concurrency.fs - Code that does concurrency stuff
 	PrintingPrettyStuff.fs - Code that does printing for the events as they occured
 	Experiments.fs - Implementation of experiments and the suffices funtion
@@ -11,6 +11,9 @@ The program is split over multiple files. :
 	Coordination.fs - Implementation of the coordination of clients.
 	CoordinationTest.fs- Code that tests the coordination implementation
 	Program.fs - The program entry point
+
+To see our debug messages in all their glory, reinstate the pr and prStr
+functions on line ~150 of Coordination.fs.
 
 # Building #
 The .fsproject file contains the correct settings to compile the program. The
