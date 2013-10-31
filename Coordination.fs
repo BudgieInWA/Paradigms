@@ -115,20 +115,24 @@ and client (id, numLabs) =
     /// effected clients' inQueueForLab.
     let myQueue:queue option ref = ref None
     
-    // Self explaining, used to delay starting of new experiments prematurely
+    // Self explaining, used to delay starting of new experiments prematurely.
     let tellingClientsToExpectResults = ref false
     let tellingClientsResults = ref false
     let askingForLabs = ref false
     
-    /// Clients that we need to give a result to.
+    /// Clients that we need to give a result to. A client in this set is considered "in the queue"
+    /// for the lab that it was in. That is, removel from this set must be mirrored by a chnage to
+    /// inQueueForSet by the removed client.
     let clientWantsOurResult:Set<clientID> ref = ref Set.empty
     let lastUsedLab = ref -1
-    /// Our current state
+    
+    // Our current state.
     let myRequestState = ref Bored
     let myLabState     = if id < numLabs then ref Idle else ref Absent
     /// Are we in the queue for each lab?
     /// We only set an element to true when we know we have been accepted into the queue.
-    /// We only set an element to false when we know that our entry in the queue has been canceled, we have received a lab, or we receive a result.
+    /// We only set an element to false when we know that our entry in the queue has been canceled,
+    /// we have received a lab, or we receive a result.
     let inQueueForLab = Array.init numLabs (fun i -> false)
     /// The client coordinating each lab, according to the most recent information known by this client.
     let lastKnownOwner = Array.init numLabs (fun labID -> labID)  // Initially client i has lab i
@@ -137,16 +141,16 @@ and client (id, numLabs) =
 
     ///The result of our experiment
     let result:expResult option ref = ref None
+    
     // Helper functions.
     let IHave l = lastKnownOwner.[l] = id
     
-    
     // printing functions for this client
-    let prStr (pre:string) str = (); //prIndStr id (sprintf "Client%d: %s" id pre) str 
-    let pr (pre:string) res = ()//(prStr pre (sprintf "%A" res);
+    let prStr (pre:string) str = () //prIndStr id (sprintf "Client%d: %s" id pre) str 
+    let pr (pre:string) res = () //(prStr pre (sprintf "%A" res);
     
     /// Should we wait before starting a new experiment?
-    /// Be sure to lock all modifications to these vars. TODO
+    /// Be sure to only safely modify these vars
     let cannotStartExp () =    !tellingClientsResults
                             || !tellingClientsToExpectResults
                             || !askingForLabs
@@ -155,21 +159,20 @@ and client (id, numLabs) =
                             || !myLabState = Using
                             || Array.exists (fun b -> b) inQueueForLab
 
+    /// Report a result to the host.
     let reportResult res = 
-        lock result <| fun() -> if Option.isSome (!result) then prStr "result ignored" "";() // we have jumped in between a previous
-                                                                   // result being written and said result
-                                                                   // being returned
+        lock result <| fun() -> if Option.isSome (!result) then prStr "result igored" ""; ()
                                 else result := Some res
                                      prStr "result reported" ""
                                      wakeWaiters result
-
+    /// Block until a result is reported using reportResult.
     let waitForResult (this:client) =
         lock result <| fun() -> prStr "waitForResult" ""
                                 waitFor result
                                 let res = Option.get !result
                                 res
     
-    
+    /// Get the client that is at the front of the queue, if there is one.
     let peekClient maybeQ =
         match maybeQ with
             | None -> None
@@ -177,7 +180,7 @@ and client (id, numLabs) =
                             | [] -> None
                             | (c,_,_) :: tail -> Some c
 
-    /// Gets the locks for both this and other (in a consistent order) before running f.
+    /// Gets the locks for both this and other (in a consistant order) before running f.
     let rec doSafely (thisID:clientID) (otherID:clientID) f =
         if thisID < otherID then doSafely otherID thisID f
         else
@@ -196,7 +199,6 @@ and client (id, numLabs) =
   
     /// Safely passes our lab onto the client at the front of the queue (removing clients that reject the
     /// offer from the queue).
-    /// LabState should be Idle
     let rec passLabOn this =
         let co = (peekClient !myQueue)
         if (Option.isNone co) then prStr "passLabOn but Q is empty," "stopping"; ()
@@ -245,6 +247,7 @@ and client (id, numLabs) =
                         | None -> lock restartLock <| fun () -> (Array.set inQueueForLab l false; wakeWaiters restartLock); prStr "removed" ""; true // None means we were removed from their queue or set
         ) then aRemoveFromQueue this l
     
+    /// Enters cancel state and starts sending requests to be taken off queues
     let cancelAllExcept (this:client) (thatLab:labID option) =
         lock this <| fun () ->
             prStr "CancelAll" ""
@@ -406,7 +409,8 @@ and client (id, numLabs) =
             Some lastKnownOwner.[l] // Tell other who we gave the lab to.
 
     /// Tell this client that we no longer need our experiment done.
-    /// Returns the new lab owner if we don't own the lab anymore, or -1 if someone else has them in their set.
+    /// Returns the new lab owner if we don't own the lab anymore, or -1 if the client isn't in the queue
+    /// (someone else has a result for them).
     member this.RRemoveFromQueue (other:client) (l:labID) : clientID option =
         if !lastUsedLab = l && Set.contains other.ClientID !clientWantsOurResult then
             pr ("RRemoveFromQueue for lab "+string l+" from client") other.ClientID
@@ -452,6 +456,8 @@ and client (id, numLabs) =
         lock restartLock <| fun () -> Array.set inQueueForLab l false // other will remove us from their set
                                       wakeWaiters restartLock
 
+    /// Tell this client to expect a result in the the furute. After this method is called, other /will/ send a result 
+    /// to this client.
     member this.RExpectResult (other:client) (l:labID) =
         match !myRequestState, !myLabState with
             | Requesting, Searching ->
